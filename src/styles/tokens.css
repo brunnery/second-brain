@@ -1,0 +1,63 @@
+/* ================================================================
+   DESIGN TOKENS — "Chalk & Iron"
+   Warm graphite surfaces, chalk-white type, one signal colour per area.
+   Change colours here only; components read these variables.
+   ================================================================ */
+:root {
+  /* surfaces */
+  --bg: #0f0f0d;
+  --surface: #181815;
+  --raised: #22211d;
+  --sunken: #0b0b09;
+  --line: #2f2d28;
+  --line-strong: #46433b;
+
+  /* type */
+  --text: #f3efe4;
+  --muted: #a39e90;
+  --faint: #6f6a5f;
+  --on-accent: #12120f;
+
+  /* area signal colours */
+  --train: #d4ff3a;      /* lime — strength */
+  --cardio: #ff7a45;     /* ember — cardio */
+  --mobility: #b9a3ff;   /* lavender — routines */
+  --food: #ffc94a;       /* amber — nutrition */
+  --money: #7cc4ff;      /* sky — finance */
+
+  /* status */
+  --good: #63d98f;
+  --warn: #ffc94a;
+  --bad: #ff5f57;
+
+  /* macro colours */
+  --protein: #ff7a9c;
+  --carbs: #7cc4ff;
+  --fat: #ffc94a;
+
+  /* shape + rhythm */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --gap: 12px;
+  --pad: 16px;
+  --tap: 44px;
+  --maxw: 560px;
+
+  /* type */
+  --font: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-wide: "Archivo", system-ui, sans-serif;
+  --fs-xs: 11.5px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 24px;
+  --fs-xxl: 34px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-h: 64px;
+
+  color-scheme: dark;
+}

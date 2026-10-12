@@ -1,0 +1,236 @@
+import { describe, it, expect } from "vitest";
+import { generatePlan, weeklyVolume, mesoWeek, dayForDate, candidatesFor } from "../features/training/engine/plan.js";
+import { suggestNext, e1rm, historyOf } from "../features/training/engine/progression.js";
+import { planCardio, estimateKcal, weeklyIntents } from "../features/cardio/engine/cardio.js";
+import { computeTargets, planWeek, dayTotals, shoppingList, checkIn, weeklyRate, scaleFor } from "../features/nutrition/engine/nutrition.js";
+import { mealById, MEALS } from "../features/nutrition/data/meals.js";
+import { EXERCISES } from "../features/training/data/exercises.js";
+import { FOODS } from "../features/nutrition/data/foods.js";
+import { routineStreak, DEFAULT_SCHEDULE } from "../features/routines/programs.js";
+import { addDays, dayIdx, weekStart } from "../lib/dates.js";
+import { decideSync } from "../lib/sync.js";
+
+const profile = { goal: "leanBulk", phase: "hypertrophy", daysPerWeek: 6, sessionMin: 75, backCare: true, equipment: "gym" };
+
+describe("data integrity", () => {
+  it("exercise ids are unique", () => {
+    expect(new Set(EXERCISES.map((e) => e.id)).size).toBe(EXERCISES.length);
+    expect(EXERCISES.length).toBeGreaterThan(150);
+  });
+  it("meals reference existing foods", () => {
+    const ids = new Set(FOODS.map((f) => f.id));
+    for (const m of MEALS) for (const [id] of m.items) expect(ids.has(id), `${m.id} → ${id}`).toBe(true);
+  });
+  it("food ids are unique", () => {
+    expect(new Set(FOODS.map((f) => f.id)).size).toBe(FOODS.length);
+  });
+});
+
+describe("training plan", () => {
+  it("builds 6 PPL days with no duplicate exercise inside a day", () => {
+    const plan = generatePlan(profile);
+    expect(plan.days).toHaveLength(6);
+    for (const d of plan.days) {
+      expect(d.items.length).toBeGreaterThanOrEqual(5);
+      expect(new Set(d.items.map((i) => i.exerciseId)).size).toBe(d.items.length);
+    }
+  });
+  it("back care excludes high spinal-load lifts in hypertrophy", () => {
+    const plan = generatePlan(profile);
+    const ids = plan.days.flatMap((d) => d.items.map((i) => i.exerciseId));
+    const heavy = EXERCISES.filter((e) => e.spine === 2).map((e) => e.id);
+    expect(ids.some((id) => heavy.includes(id))).toBe(false);
+  });
+  it("strength phase uses low reps on primaries and fewer accessories", () => {
+    const plan = generatePlan({ ...profile, phase: "strength" });
+    const prim = plan.days[0].items.find((i) => i.role === "primary");
+    expect(prim.repMax).toBeLessThanOrEqual(5);
+    for (const d of plan.days) expect(d.items.filter((i) => i.role === "accessory").length).toBeLessThanOrEqual(3);
+  });
+  it("conditioning adds finishers", () => {
+    const plan = generatePlan({ ...profile, phase: "conditioning" });
+    expect(plan.days.every((d) => d.items.some((i) => i.role === "finisher"))).toBe(true);
+  });
+  it("every split size works", () => {
+    for (const n of [3, 4, 5, 6]) expect(generatePlan({ ...profile, daysPerWeek: n }).days).toHaveLength(n);
+  });
+  it("weekly volume is in a sensible range for chest", () => {
+    const v = weeklyVolume(generatePlan(profile));
+    expect(v.chest).toBeGreaterThanOrEqual(10);
+    expect(v.chest).toBeLessThanOrEqual(30);
+  });
+  it("mesoWeek cycles 1..6", () => {
+    const plan = { mesoStart: "2026-01-05" };
+    expect(mesoWeek(plan, "2026-01-05")).toBe(1);
+    expect(mesoWeek(plan, "2026-02-09")).toBe(6);
+    expect(mesoWeek(plan, "2026-02-16")).toBe(1);
+  });
+  it("dayForDate respects swaps", () => {
+    const plan = generatePlan(profile);
+    const mon = "2026-10-12", tue = "2026-10-13";
+    expect(dayForDate(plan, mon).weekday).toBe(0);
+    const moves = { [mon]: plan.days[1].id, [tue]: plan.days[0].id };
+    expect(dayForDate(plan, mon, moves).id).toBe(plan.days[1].id);
+    expect(dayForDate(plan, tue, moves).id).toBe(plan.days[0].id);
+  });
+  it("home equipment only uses home gear", () => {
+    expect(candidatesFor("h_press", { equipment: "home" }).every((e) => ["dumbbell", "bodyweight", "band", "kettlebell", "other"].includes(e.equipment))).toBe(true);
+  });
+});
+
+describe("progression", () => {
+  const item = { sets: 3, repMin: 8, repMax: 12, rir: 1 };
+  const ex = EXERCISES.find((e) => e.id === "bb-bench");
+  it("adds weight when every set hits the top", () => {
+    const r = suggestNext(item, [{ date: "x", sets: [12, 12, 12].map((reps) => ({ kg: 80, reps, done: true })) }], ex);
+    expect(r.kg).toBe(82.5);
+  });
+  it("holds weight otherwise", () => {
+    const r = suggestNext(item, [{ date: "x", sets: [12, 10, 9].map((reps) => ({ kg: 80, reps, done: true })) }], ex);
+    expect(r.kg).toBe(80);
+  });
+  it("backs off after two misses", () => {
+    const miss = { date: "x", sets: [7, 6, 6].map((reps) => ({ kg: 80, reps, done: true })) };
+    expect(suggestNext(item, [miss, miss], ex).kg).toBe(76);
+  });
+  it("e1rm epley", () => expect(Math.round(e1rm(100, 5))).toBe(117));
+  it("historyOf returns newest first", () => {
+    const s = [
+      { date: "2026-01-01", finishedAt: 1, entries: [{ exerciseId: "a", sets: [] }] },
+      { date: "2026-02-01", finishedAt: 1, entries: [{ exerciseId: "a", sets: [] }] },
+    ];
+    expect(historyOf(s, "a")[0].date).toBe("2026-02-01");
+  });
+});
+
+describe("cardio", () => {
+  const liftDays = [0, 1, 2, 3, 4, 5].map((w) => ({ weekday: w, leg: w === 2 || w === 5 }));
+  it("cut gets more sessions than bulk", () => {
+    expect(weeklyIntents("hypertrophy", "cut").length).toBeGreaterThan(weeklyIntents("hypertrophy", "bulk").length);
+  });
+  it("hard sessions avoid leg days and the day before", () => {
+    const plan = planCardio({ phase: "conditioning", goal: "cut", prefs: ["stairmaster", "rower", "bike", "airBike", "inclineWalk", "run"], liftDays });
+    for (const s of plan.filter((p) => p.intent !== "z2")) {
+      expect([2, 5]).not.toContain(s.weekday);
+      expect([1, 4]).not.toContain(s.weekday);
+    }
+  });
+  it("only uses preferred machines", () => {
+    const plan = planCardio({ phase: "hybrid", goal: "maintain", prefs: ["rower", "inclineWalk"], liftDays });
+    expect(plan.every((p) => ["rower", "inclineWalk"].includes(p.type))).toBe(true);
+  });
+  it("incline walk calories via ACSM", () => {
+    const k = estimateKcal({ type: "inclineWalk", minutes: 30, speed: 4.8, incline: 12 }, 85);
+    expect(k).toBeGreaterThan(250);
+    expect(k).toBeLessThan(400);
+  });
+});
+
+describe("nutrition", () => {
+  const base = { sex: "male", weightKg: 85, heightCm: 182, age: 25, lifestyle: "mixed" };
+  it("cut < maintain < bulk", () => {
+    const c = computeTargets({ ...base, goal: "cut" }).kcal;
+    const m = computeTargets({ ...base, goal: "maintain" }).kcal;
+    const b = computeTargets({ ...base, goal: "bulk" }).kcal;
+    expect(c).toBeLessThan(m);
+    expect(m).toBeLessThan(b);
+  });
+  it("macros add up to kcal", () => {
+    const t = computeTargets({ ...base, goal: "leanBulk", weeklyExerciseKcal: 3000 });
+    expect(Math.abs(t.protein * 4 + t.carbs * 4 + t.fat * 9 - t.kcal)).toBeLessThan(10);
+  });
+  it("meal plan lands near target kcal and protein", () => {
+    const targets = computeTargets({ ...base, goal: "leanBulk", weeklyExerciseKcal: 3000 });
+    const plan = planWeek({ targets, seed: 7 });
+    expect(plan.days).toHaveLength(7);
+    for (const d of plan.days) {
+      const t = dayTotals(d);
+      expect(Math.abs(t.kcal - targets.kcal) / targets.kcal).toBeLessThan(0.15);
+      expect(t.p).toBeGreaterThan(targets.protein * 0.8);
+      expect(t.p).toBeLessThan(targets.protein * 1.4);
+    }
+  });
+  it("meal prep repeats lunches", () => {
+    const targets = computeTargets({ ...base, goal: "maintain" });
+    const plan = planWeek({ targets, seed: 3 });
+    const lunch = (d) => plan.days[d].meals.find((m) => m.slot === "lunch").mealId;
+    expect(lunch(0)).toBe(lunch(1));
+    expect(lunch(1)).toBe(lunch(2));
+  });
+  it("shopping list sums foods", () => {
+    const targets = computeTargets({ ...base, goal: "maintain" });
+    expect(shoppingList(planWeek({ targets, seed: 3 })).length).toBeGreaterThan(5);
+  });
+  it("scaleFor resizes", () => {
+    expect(scaleFor(mealById("chicken-rice-broc"), 800, 50).cf).toBeGreaterThan(0.5);
+  });
+  it("check-in", () => {
+    expect(checkIn("bulk", 0).action).toBe("up");
+    expect(checkIn("cut", -0.7).action).toBe("ok");
+  });
+  it("weekly rate from weights", () => {
+    const w = Array.from({ length: 22 }, (_, i) => ({ date: addDays("2026-01-01", i), kg: 85 + i * 0.03 }));
+    expect(weeklyRate(w)).toBeGreaterThan(0.15);
+  });
+});
+
+describe("routines + sync + dates", () => {
+  it("streak ignores unscheduled evenings", () => {
+    const sat = "2026-10-10";
+    const done = { [sat]: "back", [addDays(sat, -3)]: "mobility" };
+    expect(dayIdx(sat)).toBe(5);
+    expect(routineStreak(done, DEFAULT_SCHEDULE, addDays(sat, 1))).toBe(2);
+  });
+  it("decideSync", () => {
+    expect(decideSync("2026-01-02T00:00:00Z", "2026-01-01T00:00:00Z")).toBe("push");
+    expect(decideSync("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")).toBe("pull");
+    expect(decideSync(null, null)).toBe("none");
+  });
+  it("weekStart is Monday", () => expect(weekStart("2026-10-18")).toBe("2026-10-12"));
+});
+
+import { dueDates, pendingRecurring, feedbackFor, monthSummary, SEED_CATS } from "../features/finance/engine.js";
+describe("finance", () => {
+  it("monthly on the 31st clamps to month end", () => {
+    const d = dueDates({ interval: "monthly", day: 31, start: "2026-01-01" }, "2026-04-30");
+    expect(d).toEqual(["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30"]);
+  });
+  it("yearly + weekly", () => {
+    expect(dueDates({ interval: "yearly", day: 15, month: 3, start: "2025-01-01" }, "2026-12-31")).toEqual(["2025-03-15", "2026-03-15"]);
+    expect(dueDates({ interval: "weekly", start: "2026-01-05" }, "2026-01-20")).toHaveLength(3);
+  });
+  it("recurring generation is idempotent", () => {
+    let n = 0;
+    const st = { entries: [], recurring: [{ id: "r", amount: 900, kind: "expense", cat: "Rent", interval: "monthly", day: 1, start: "2026-01-01" }] };
+    const first = pendingRecurring(st, "2026-03-15", () => `id${n++}`);
+    expect(first).toHaveLength(3);
+    expect(pendingRecurring({ ...st, entries: first }, "2026-03-15")).toHaveLength(0);
+  });
+  it("budget feedback warns at 80 %", () => {
+    const st = { cats: SEED_CATS, entries: [{ date: "2026-10-01", amount: 100, kind: "expense", cat: "Eating out" }] };
+    expect(feedbackFor(st.entries[0], st).tone).toBe("warn");
+  });
+  it("summary", () => {
+    const s = monthSummary([{ date: "2026-10-01", amount: 1000, kind: "income" }, { date: "2026-10-02", amount: 250, kind: "expense" }], "2026-10");
+    expect(s.net).toBe(750);
+    expect(s.savingsRate).toBe(75);
+  });
+});
+
+import { buildIcs, fold } from "../lib/ics.js";
+import { validateBackup } from "../lib/backup.js";
+describe("ics + backup", () => {
+  it("folds long lines at 75 octets and uses CRLF", () => {
+    const f = fold("SUMMARY:" + "x".repeat(200));
+    expect(f.split("\r\n ").every((l) => new TextEncoder().encode(l).length <= 75)).toBe(true);
+    const ics = buildIcs([{ uid: "a", date: "2026-10-12", title: "Back", start: "21:00", minutes: 7, alarm: true }]);
+    expect(ics).toContain("DTSTART;TZID=Europe/Zurich:20261012T210000");
+    expect(ics).toContain("DTEND;TZID=Europe/Zurich:20261012T210700");
+    expect(ics.includes("\r\n")).toBe(true);
+  });
+  it("validates backups", () => {
+    expect(validateBackup({ app: "x" }, ["profile"]).ok).toBe(false);
+    expect(validateBackup({ app: "second-brain", schemaVersion: 2, data: { profile: {} } }, ["profile"]).ok).toBe(true);
+    expect(validateBackup({ app: "second-brain", schemaVersion: 99, data: { profile: {} } }, ["profile"]).ok).toBe(false);
+  });
+});
