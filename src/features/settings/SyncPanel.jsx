@@ -20,7 +20,7 @@ export function SyncBadge() {
   );
 }
 
-export default function SyncPanel() {
+export default function SyncPanel({ preferRemote = false }) {
   const s = useSyncStatus();
   const [email, setEmail] = useState(currentEmail() || "");
   const [pw, setPw] = useState("");
@@ -54,7 +54,7 @@ export default function SyncPanel() {
           {err && <div className="xs bad">{err}</div>}
           <button className="btn primary" disabled={!email || !pw || busy} onClick={async () => {
             setBusy(true); setErr(null);
-            try { await signIn(email.trim(), pw); setPw(""); } catch (e) { setErr(e.message); }
+            try { await signIn(email.trim(), pw, { preferRemote }); setPw(""); } catch (e) { setErr(e.message); }
             setBusy(false);
           }}><LogIn size={16} /> {busy ? "Signing in…" : "Sign in"}</button>
           <div className="xs faint">Account is created in Supabase (Authentication → Users). On first sign-in the cloud copy is replaced by whichever side is newer.</div>

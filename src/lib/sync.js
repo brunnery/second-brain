@@ -54,11 +54,12 @@ const storeSession = (j) =>
     },
   });
 
-export async function signIn(email, password) {
+/** preferRemote: a fresh device takes the cloud copy even if it has local edits (e.g. from onboarding). */
+export async function signIn(email, password, { preferRemote = false } = {}) {
   const j = await authRequest("token?grant_type=password", { email, password });
   storeSession(j);
   setStatus({ state: "syncing", error: null });
-  await syncNow();
+  await syncNow({ preferRemote });
 }
 
 export function signOut() {
@@ -95,7 +96,7 @@ async function pushRemote(token) {
 }
 
 let running = null;
-export async function syncNow() {
+export async function syncNow({ preferRemote = false } = {}) {
   if (!syncConfigured() || !session()) return "skip";
   if (running) return running;
   running = (async () => {
@@ -103,7 +104,7 @@ export async function syncNow() {
     try {
       const token = await validToken();
       const remote = await fetchRemote(token);
-      const decision = decideSync(getMeta().updatedAt, remote?.updated_at);
+      const decision = preferRemote && remote ? "pull" : decideSync(getMeta().updatedAt, remote?.updated_at);
       if (decision === "pull") {
         replaceAll(remote.data || {});
         setMeta({ updatedAt: remote.updated_at });

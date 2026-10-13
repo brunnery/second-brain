@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { ArrowRight, ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowLeft, Sparkles, Cloud } from "lucide-react";
+import { Sheet } from "../../components/ui.jsx";
+import SyncPanel from "../settings/SyncPanel.jsx";
 import { useProfile } from "./store.js";
 import { BodyFields, GoalPicker, PhasePicker, TrainingFields, CardioFields } from "./ProfileForm.jsx";
 import { rebuildPlans } from "../coach.js";
@@ -17,6 +19,7 @@ const STEPS = [
 export default function Onboarding() {
   const [profile, setProfile] = useProfile();
   const [step, setStep] = useState(0);
+  const [signIn, setSignIn] = useState(false);
   const set = (patch) => setProfile((p) => ({ ...p, ...patch }));
   const { title, sub, C } = STEPS[step];
   const last = step === STEPS.length - 1;
@@ -33,7 +36,21 @@ export default function Onboarding() {
       <div className="bar thin" style={{ margin: "10px 0 18px" }}><span style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} /></div>
       <h1 className="title">{title}</h1>
       <p className="muted small" style={{ margin: "8px 0 18px" }}>{sub}</p>
+      {step === 0 && (
+        <button className="card tight press hstack" style={{ width: "100%", textAlign: "left", marginBottom: 18 }} onClick={() => setSignIn(true)}>
+          <span className="icon-tile"><Cloud size={18} /></span>
+          <div className="grow">
+            <div className="h3">Already set up on another device?</div>
+            <div className="xs muted">Sign in to load your data instead of starting fresh.</div>
+          </div>
+        </button>
+      )}
       <C p={profile} set={set} />
+      {signIn && (
+        <Sheet title="Sign in" onClose={() => setSignIn(false)} area="train">
+          <SyncPanel preferRemote />
+        </Sheet>
+      )}
       <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, padding: "12px 16px calc(12px + var(--safe-bottom))", background: "var(--bg)", borderTop: "1px solid var(--line)" }}>
         <div className="hstack" style={{ maxWidth: "var(--maxw)", margin: "0 auto" }}>
           {step > 0 && <button className="btn ghost" onClick={() => setStep(step - 1)} aria-label="Back"><ArrowLeft size={18} /></button>}
