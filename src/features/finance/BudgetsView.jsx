@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { useFinance, categoryTotals } from "./engine.js";
+import { useFinance, categoryTotals, NEED, needOf } from "./engine.js";
 import { RATING } from "./EntrySheet.jsx";
 import { Chips, NumInput, Bar, Sheet, Field, toast } from "../../components/ui.jsx";
 import { monthKey, today } from "../../lib/dates.js";
@@ -17,6 +17,7 @@ function CatSheet({ name, onClose }) {
         {c.kind === "expense" && (
           <>
             <Field label="Rating"><Chips value={c.rating} onChange={(v) => set({ rating: v })} options={Object.entries(RATING).map(([k, [l]]) => [k, l])} /></Field>
+            <Field label="Usually necessary? (default for new entries)"><Chips value={needOf({ cat: name }, fin.cats)} onChange={(v) => set({ need: v })} options={Object.entries(NEED).map(([k, [l]]) => [k, l])} /></Field>
             <Field label="Monthly budget (empty = none)"><NumInput value={c.budget} onChange={(v) => set({ budget: v || null })} placeholder="CHF" /></Field>
           </>
         )}

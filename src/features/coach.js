@@ -12,7 +12,7 @@ import { useRoutines } from "./routines/store.js";
 import { useBody, latestWeight } from "./body/store.js";
 import { useNutrition } from "./nutrition/store.js";
 import { generatePlan } from "./training/engine/plan.js";
-import { planCardio, estimateKcal, intensityOfIntent } from "./cardio/engine/cardio.js";
+import { planCardio, estimateKcal, intensityOfIntent, matchLogs } from "./cardio/engine/cardio.js";
 import { computeTargets, weeklyExerciseKcal, planWeek, weeklyRate, checkIn } from "./nutrition/engine/nutrition.js";
 import { workoutById } from "./cardio/data/cardio.js";
 import { isoWeek, weekStart, today, addDays, dayIdx } from "../lib/dates.js";
@@ -72,10 +72,10 @@ export function useTargets() {
 }
 
 /** (Re)build training plan + meal plan from the current profile. */
-export function rebuildPlans({ training = true, meals = true, keepLocked = true } = {}) {
+export function rebuildPlans({ training = true, meals = true, keepLocked = true, silent = false } = {}) {
   const profile = getState("profile");
   if (training) {
-    setState("training", (t) => ({ ...t, plan: generatePlan(profile), moves: {} }));
+    setState("training", (t) => ({ ...t, plan: generatePlan(profile), moves: {} }), { silent });
   }
   if (meals) {
     const n = getState("nutrition");
@@ -93,10 +93,10 @@ export function rebuildPlans({ training = true, meals = true, keepLocked = true 
     });
     const plan = planWeek({
       targets, seed: Math.floor(Math.random() * 1e6) + 1,
-      mealPrep: n.planSettings?.mealPrep ?? true, maxCost: n.planSettings?.maxCost ?? 2,
+      mealPrep: n.planSettings?.mealPrep ?? true, maxCost: n.planSettings?.maxCost ?? 2, source: n.planSettings?.source ?? "mine",
       prev: keepLocked ? n.plan : null,
     });
-    setState("nutrition", (x) => ({ ...x, plan }));
+    setState("nutrition", (x) => ({ ...x, plan }), { silent });
   }
 }
 
@@ -125,9 +125,13 @@ export function buildFeedEvents({ profile, training, cardio, routines, from = to
           desc: `${day.focus}\n` + day.items.map((it) => `• ${exerciseById(it.exerciseId, training.customExercises)?.name || "?"} ${it.role === "finisher" ? `${it.minutes || 8} min` : `${it.sets}×${it.repMin}-${it.repMax}`}`).join("\n"),
         });
       }
+      const matched = matchLogs(slots, cardio.logs || []);
       for (const s of slots.filter((x) => x.date === date && !cardio.skipped[x.key])) {
         const wk = workoutById(s.workoutId);
-        events.push({ uid: `cardio-${s.key}`, date, title: `🔥 ${wk?.name} · ${CT[s.type].short} ${s.minutes}′`, desc: `${INT[s.intent].name}: ${wk?.how || ""}` });
+        const l = matched[s.key];
+        events.push(l
+          ? { uid: `cardio-${s.key}`, date, title: `✅ ${CT[l.type]?.short || "Cardio"} ${l.minutes}′`, desc: l.note || "" }
+          : { uid: `cardio-${s.key}`, date, title: `🔥 ${wk?.name} · ${CT[s.type].short} ${s.minutes}′`, desc: `${INT[s.intent].name}: ${wk?.how || ""}` });
       }
       const rid = routines.schedule[i];
       if (rid) {
@@ -150,12 +154,26 @@ export function useFeedSnapshot() {
   const [cardio] = useCardio();
   const [routines] = useRoutines();
   const { plan, moves, customExercises } = training;
-  const { overrides, skipped } = cardio;
+  const { overrides, skipped, logs } = cardio;
   useEffect(() => {
     if (!plan) return;
-    const events = buildFeedEvents({ profile, training: { plan, moves, customExercises }, cardio: { overrides, skipped }, routines });
+    const events = buildFeedEvents({ profile, training: { plan, moves, customExercises }, cardio: { overrides, skipped, logs }, routines });
     if (JSON.stringify(getState("feed").events) !== JSON.stringify(events)) {
       setState("feed", { generatedAt: new Date().toISOString(), events });
     }
-  }, [profile, plan, moves, customExercises, overrides, skipped, routines]);
+  }, [profile, plan, moves, customExercises, overrides, skipped, logs, routines]);
+}
+
+/** One-time upgrades of stored data (run once per device on start). */
+export function useMigrations() {
+  useEffect(() => {
+    const n = getState("nutrition");
+    const p = getState("profile");
+    // v2.1: meal plans built from "my meals" — rebuild an old plan once (locked meals kept)
+    if (p.onboarded && n.plan && n.planSettings && n.planSettings.source === undefined) {
+      // silent: never mark local data as "newer" here, so a stale device can't overwrite the cloud
+      setState("nutrition", (x) => ({ ...x, planSettings: { ...x.planSettings, source: "mine" } }), { silent: true });
+      rebuildPlans({ training: false, meals: true, keepLocked: true, silent: true });
+    }
+  }, []);
 }

@@ -134,3 +134,24 @@ export function estimateKcal(entry, bodyKg = 80) {
 }
 
 export const intensityOfIntent = (intent) => INTENTS[intent]?.intensity || "moderate";
+
+/**
+ * Link logged sessions to this week's suggestions. A log replaces a suggestion when it
+ * was logged from it (slotKey) or — if not linked to anything — happened on the same day.
+ * Returns { [slot.key]: log }.
+ */
+export function matchLogs(slots, logs) {
+  const keys = new Set(slots.map((s) => s.key));
+  const out = {};
+  const used = new Set();
+  for (const s of slots) {
+    const l = logs.find((x) => x.slotKey === s.key);
+    if (l) { out[s.key] = l; used.add(l.id); }
+  }
+  for (const s of slots) {
+    if (out[s.key]) continue;
+    const l = logs.find((x) => !used.has(x.id) && x.date === s.date && (!x.slotKey || !keys.has(x.slotKey)));
+    if (l) { out[s.key] = l; used.add(l.id); }
+  }
+  return out;
+}

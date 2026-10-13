@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, ChefHat } from "lucide-react";
+import MealBuilder from "./MealBuilder.jsx";
+import { SLOT_NAMES } from "./data/meals.js";
 import { useNutrition } from "./store.js";
-import { FOODS, FOOD_CATS } from "./data/foods.js";
+import { FOODS, FOOD_CATS, foodById } from "./data/foods.js";
 import { Chips, Sheet, Field, NumInput, toast } from "../../components/ui.jsx";
 import { AddFoodSheet } from "./shared.jsx";
 import { num } from "../../lib/format.js";
@@ -46,10 +48,27 @@ export default function FoodsView() {
   const [cat, setCat] = useState("all");
   const [adding, setAdding] = useState(false);
   const [logging, setLogging] = useState(false);
+  const [editMeal, setEditMeal] = useState(null);
   const list = useMemo(() => [...FOODS, ...n.customFoods].filter((f) =>
     (cat === "all" || f.cat === cat) && (!q || f.name.toLowerCase().includes(q.toLowerCase()))), [q, cat, n.customFoods]);
   return (
     <div className="stack">
+      <div className="between"><h2 className="h2">My meals</h2><button className="btn sm" onClick={() => setEditMeal({})}><Plus size={14} /> New</button></div>
+      <div className="xs muted" style={{ marginTop: -6 }}>Your go-to meals. The plan uses them, and the app sizes the portions to your goal.</div>
+      <div className="card flush list">
+        {n.myMeals.length === 0 && <div className="empty">No own meals yet.</div>}
+        {n.myMeals.map((m) => (
+          <button key={m.id} className="row" onClick={() => setEditMeal(m)}>
+            <ChefHat size={16} className="faint" />
+            <div className="grow">
+              <div style={{ fontWeight: 600 }}>{m.name}</div>
+              <div className="meta">{m.slots.map((x) => SLOT_NAMES[x]).join(", ")} · {m.items.map((i) => foodById(i[0])?.name.split(/[,(]/)[0]).join(", ")}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <h2 className="h2 mt">Food database</h2>
       <div className="hstack" style={{ position: "relative" }}>
         <Search size={17} className="faint" style={{ position: "absolute", left: 12 }} />
         <input className="input" style={{ paddingLeft: 36 }} placeholder="Search foods…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search foods" />
@@ -68,6 +87,7 @@ export default function FoodsView() {
       </div>
       <div className="xs faint">Values are approximate (Swiss food composition database / USDA). For branded products, add your own from the label.</div>
       {adding && <CustomFoodSheet onClose={() => setAdding(false)} />}
+      {editMeal && <MealBuilder mode="edit" initial={editMeal.id ? editMeal : { slots: ["lunch", "dinner"], items: [] }} onClose={() => setEditMeal(null)} />}
       {logging && <AddFoodSheet onClose={() => setLogging(false)} />}
     </div>
   );

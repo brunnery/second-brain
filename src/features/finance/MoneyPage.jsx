@@ -12,8 +12,9 @@ import BudgetsView from "./BudgetsView.jsx";
 import RecurringView from "./RecurringView.jsx";
 import SavingsView from "./SavingsView.jsx";
 import ReportView from "./ReportView.jsx";
+import OwedView, { OwedCard } from "./OwedView.jsx";
 
-const TABS = [["overview", "Overview"], ["entries", "Entries"], ["budgets", "Budgets"], ["recurring", "Recurring"], ["savings", "Savings"], ["report", "Report"]];
+const TABS = [["overview", "Overview"], ["entries", "Entries"], ["owed", "Owed"], ["budgets", "Budgets"], ["recurring", "Recurring"], ["savings", "Savings"], ["report", "Report"]];
 
 /** Book due recurring items once per app open (idempotent). */
 export function useRecurringAutobook() {
@@ -62,6 +63,7 @@ function Overview({ onAdd }) {
         <button className="btn" onClick={() => onAdd("expense")}><TrendingDown size={16} /> Expense</button>
         <button className="btn" onClick={() => onAdd("income")}><TrendingUp size={16} /> Income</button>
       </div>
+      <OwedCard onOpen={() => go("money/owed")} />
       {over.map((c) => (
         <Note key={c.name} icon={AlertTriangle} color="var(--bad)"><b>{c.name}</b> is over budget: {money(c.total)} of {money(c.budget)}.</Note>
       ))}
@@ -104,6 +106,7 @@ export default function MoneyPage({ route }) {
       {t === "recurring" && <RecurringView />}
       {t === "savings" && <SavingsView />}
       {t === "report" && <ReportView />}
+      {t === "owed" && <OwedView />}
       <button className="fab" aria-label="Add expense" onClick={() => setAdding({ kind: "expense" })}><Plus size={26} /></button>
       {adding && <EntrySheet initial={adding} onClose={() => setAdding(null)} />}
     </div>

@@ -234,3 +234,82 @@ describe("ics + backup", () => {
     expect(validateBackup({ app: "second-brain", schemaVersion: 99, data: { profile: {} } }, ["profile"]).ok).toBe(false);
   });
 });
+
+import { matchLogs } from "../features/cardio/engine/cardio.js";
+describe("cardio log matching", () => {
+  const slots = [{ key: "2026-10-12#0", date: "2026-10-12" }, { key: "2026-10-15#1", date: "2026-10-15" }];
+  it("links by slotKey and by same day", () => {
+    const logs = [{ id: "a", date: "2026-10-12", slotKey: "2026-10-12#0" }, { id: "b", date: "2026-10-15" }, { id: "c", date: "2026-10-15" }];
+    const m = matchLogs(slots, logs);
+    expect(m["2026-10-12#0"].id).toBe("a");
+    expect(m["2026-10-15#1"].id).toBe("b");
+  });
+  it("leaves unmatched suggestions alone", () => {
+    expect(matchLogs(slots, [{ id: "x", date: "2026-10-13" }])).toEqual({});
+  });
+});
+
+import { topUp, nextMealTarget, planWeek as planWeek2, dayTotals as dayTotals2, computeTargets as ct2 } from "../features/nutrition/engine/nutrition.js";
+import { setUserMeals, SEED_MY_MEALS } from "../features/nutrition/data/meals.js";
+describe("my meals + top-up", () => {
+  const targets = ct2({ sex: "male", weightKg: 85, heightCm: 182, age: 25, lifestyle: "mixed", goal: "bulk", weeklyExerciseKcal: 3000 });
+  it("plans only own meals in 'mine' mode, and they cover most of the day", () => {
+    setUserMeals(SEED_MY_MEALS);
+    const plan = planWeek2({ targets, seed: 5, source: "mine" });
+    for (const d of plan.days) {
+      expect(d.meals).toHaveLength(3);
+      expect(d.meals.every((m) => m.mealId.startsWith("my-"))).toBe(true);
+      const t = dayTotals2(d);
+      expect(t.kcal / targets.kcal).toBeGreaterThan(0.75);
+      expect(t.kcal / targets.kcal).toBeLessThan(1.0);
+    }
+    setUserMeals([]);
+  });
+  it("top-up closes protein then fat then carbs", () => {
+    const items = topUp({ kcal: 700, p: 40, c: 60, f: 20 });
+    expect(items[0].foodId).toBe("whey");
+    expect(items.some((i) => i.foodId === "mixed-nuts")).toBe(true);
+    const sum = items.reduce((a, i) => a + i.kcal, 0);
+    expect(sum).toBeGreaterThan(400);
+    expect(sum).toBeLessThan(950);
+    expect(topUp({ kcal: 50, p: 5, c: 5, f: 2 })).toEqual([]);
+  });
+  it("next meal target shrinks as the day fills", () => {
+    const a = nextMealTarget(targets, { kcal: 0, p: 0 }, 3);
+    const b = nextMealTarget(targets, { kcal: 1500, p: 80 }, 1);
+    expect(a.kcal).toBeGreaterThan(700);
+    expect(b.kcal).toBeLessThan(targets.kcal);
+  });
+});
+
+import { registerStore, replaceAll, getState } from "../lib/storage.js";
+describe("storage", () => {
+  it("cloud data from an older version gets new default fields", () => {
+    registerStore("t-merge", () => ({ a: 1, added: [1, 2] }));
+    replaceAll({ "t-merge": { a: 5 } });
+    expect(getState("t-merge")).toEqual({ a: 5, added: [1, 2] });
+  });
+});
+
+import { netAmount, myShare, openShares, owedByPerson, splitEqually, needTotals, needOf } from "../features/finance/engine.js";
+describe("shared expenses + necessity", () => {
+  const round = { id: "r", date: "2026-10-10", amount: 60, kind: "expense", cat: "Going out",
+    shares: [{ id: "a", name: "Luca", amount: 15, received: true }, { id: "b", name: "Mia", amount: 15, received: false }, { id: "c", name: "Noah", amount: 15, received: false }] };
+  it("only received shares reduce the expense", () => {
+    expect(netAmount(round)).toBe(45);
+    expect(myShare(round)).toBe(15);
+  });
+  it("lists open shares by person", () => {
+    expect(openShares([round])).toHaveLength(2);
+    expect(owedByPerson([round, { ...round, id: "r2", shares: [{ id: "d", name: "Mia", amount: 10, received: false }] }])[0]).toEqual(["Mia", 25]);
+  });
+  it("splits equally including me", () => {
+    expect(splitEqually(60, ["A", "B", "C"])).toEqual([{ name: "A", amount: 15 }, { name: "B", amount: 15 }, { name: "C", amount: 15 }]);
+  });
+  it("necessity totals use entry override, then category", () => {
+    const cats = { Rent: { need: "need" }, "Going out": { need: "want" } };
+    expect(needOf({ cat: "Going out", need: "waste" }, cats)).toBe("waste");
+    const t = needTotals([{ date: "2026-10-01", amount: 900, kind: "expense", cat: "Rent" }, round], cats, "2026-10");
+    expect(t).toEqual({ need: 900, want: 45, waste: 0 });
+  });
+});

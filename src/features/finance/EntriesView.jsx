@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Repeat, Trash2 } from "lucide-react";
-import { useFinance, inMonth } from "./engine.js";
+import { useFinance, inMonth, netAmount, sharesOf, NEED, needOf } from "./engine.js";
 import { Chips, Empty, toast } from "../../components/ui.jsx";
 import { monthKey, shiftMonth, today, fmtMonth, relDay } from "../../lib/dates.js";
 import { money } from "../../lib/format.js";
@@ -43,17 +43,25 @@ export default function EntriesView({ onEdit }) {
         <div key={date}>
           <div className="between eyebrow" style={{ margin: "6px 2px" }}>
             <span>{relDay(date)}</span>
-            <span>{money(es.reduce((a, e) => a + (e.kind === "expense" ? -e.amount : e.amount), 0))}</span>
+            <span>{money(es.reduce((a, e) => a + (e.kind === "expense" ? -netAmount(e) : e.amount), 0))}</span>
           </div>
           <div className="card flush list">
             {es.map((e) => (
               <div key={e.id} className="row">
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: fin.cats[e.cat]?.color || "var(--faint)", flexShrink: 0 }} />
                 <button className="grow" style={{ background: "none", border: 0, textAlign: "left", padding: 0 }} onClick={() => onEdit(e)}>
-                  <div style={{ fontWeight: 600 }}>{e.cat} {e.recurringId && <Repeat size={12} className="faint" />}</div>
+                  <div style={{ fontWeight: 600 }}>{e.cat} {e.recurringId && <Repeat size={12} className="faint" />}
+                    {e.kind === "expense" && <span className="badge" style={{ "--b": NEED[needOf(e, fin.cats)][1], marginLeft: 6 }}>{NEED[needOf(e, fin.cats)][0]}</span>}</div>
                   {e.note && <div className="meta">{e.note}</div>}
+                  {sharesOf(e).length > 0 && (
+                    <div className="xs" style={{ color: "var(--money)" }}>
+                      {sharesOf(e).filter((x) => !x.received).length
+                        ? `${money(sharesOf(e).filter((x) => !x.received).reduce((a, x) => a + x.amount, 0))} owed by ${sharesOf(e).filter((x) => !x.received).map((x) => x.name).join(", ")}`
+                        : "all paid back"}
+                    </div>
+                  )}
                 </button>
-                <span style={{ fontWeight: 700 }} className={e.kind === "income" ? "good" : ""}>{e.kind === "income" ? "+" : "−"}{money(e.amount)}</span>
+                <span style={{ fontWeight: 700, textAlign: "right" }} className={e.kind === "income" ? "good" : ""}>{e.kind === "income" ? "+" : "−"}{money(netAmount(e))}{netAmount(e) !== e.amount && <div className="xs faint" style={{ fontWeight: 400, textDecoration: "line-through" }}>{money(e.amount)}</div>}</span>
                 <button className="iconbtn sm bare" aria-label="Delete entry" onClick={() => del(e)}><Trash2 size={15} className="faint" /></button>
               </div>
             ))}

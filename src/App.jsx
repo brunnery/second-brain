@@ -8,7 +8,7 @@ import TrainPage from "./features/training/TrainPage.jsx";
 import FoodPage from "./features/nutrition/FoodPage.jsx";
 import MoneyPage from "./features/finance/MoneyPage.jsx";
 import MorePage from "./features/settings/MorePage.jsx";
-import { useFeedSnapshot } from "./features/coach.js";
+import { useFeedSnapshot, useMigrations } from "./features/coach.js";
 import { useRecurringAutobook } from "./features/finance/MoneyPage.jsx";
 
 const TABS = [
@@ -24,6 +24,7 @@ export default function App() {
   const route = useRoute();
   const [section, ...rest] = route;
   useFeedSnapshot();
+  useMigrations();
   useRecurringAutobook();
 
   if (!profile.onboarded) return <Onboarding />;

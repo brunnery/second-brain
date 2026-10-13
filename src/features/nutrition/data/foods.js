@@ -155,7 +155,11 @@ export const FOODS = [
   f("creatine", "Creatine monohydrate", "supps", 0, 0, 0, 0, 0, 5, "1 tsp", 1),
 ];
 
-export const foodById = (id, custom = []) => FOODS.find((x) => x.id === id) || custom.find((x) => x.id === id) || null;
+let userFoods = [];
+export const setUserFoods = (list) => { userFoods = Array.isArray(list) ? list : []; };
+export const allFoods = () => [...FOODS, ...userFoods];
+export const foodById = (id, custom = []) =>
+  FOODS.find((x) => x.id === id) || userFoods.find((x) => x.id === id) || custom.find((x) => x.id === id) || null;
 
 /** Macros for a given amount of a food. */
 export function macrosOf(food, grams) {

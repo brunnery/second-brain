@@ -81,6 +81,12 @@ export function useStore(key) {
   return [value, update];
 }
 
+/** Call fn(state) now and whenever the key changes (outside React). */
+export function watch(key, fn) {
+  fn(getState(key));
+  return subscribe(key)(() => fn(getState(key)));
+}
+
 export const onAnyChange = (fn) => {
   changeHooks.add(fn);
   return () => changeHooks.delete(fn);
@@ -96,7 +102,12 @@ export const collectAll = () =>
 
 export function replaceAll(data) {
   syncedKeys().forEach((k) => {
-    if (data[k] !== undefined) setState(k, data[k], { silent: true });
+    if (data[k] === undefined) return;
+    const base = defaults.get(k)();
+    // merge with defaults so data from an older app version gets new fields
+    const value = base && typeof base === "object" && !Array.isArray(base) && data[k] && typeof data[k] === "object"
+      ? { ...base, ...data[k] } : data[k];
+    setState(k, value, { silent: true });
   });
 }
 

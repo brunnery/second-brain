@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useFinance, monthSummary, categoryTotals, ratingTotals, inMonth } from "./engine.js";
+import { useFinance, monthSummary, categoryTotals, ratingTotals, needTotals, inMonth, netAmount, NEED } from "./engine.js";
 import { MonthSwitcher } from "./EntriesView.jsx";
 import { RATING } from "./EntrySheet.jsx";
 import { Donut, BarChart, Legend } from "../../components/charts.jsx";
@@ -21,7 +21,8 @@ export default function ReportView() {
   const rest = cats.slice(6).reduce((a, c) => a + c.total, 0);
   const parts = [...top.map((c) => ({ name: c.name, value: c.total, color: c.color })), ...(rest ? [{ name: "Other", value: rest, color: "var(--faint)" }] : [])];
   const ratings = ratingTotals(fin.entries, fin.cats, mk);
-  const biggest = inMonth(fin.entries, mk).filter((e) => e.kind === "expense").sort((a, b) => b.amount - a.amount).slice(0, 5);
+  const needs = needTotals(fin.entries, fin.cats, mk);
+  const biggest = inMonth(fin.entries, mk).filter((e) => e.kind === "expense").sort((a, b) => netAmount(b) - netAmount(a)).slice(0, 5);
   const year = Array.from({ length: 12 }, (_, i) => shiftMonth(mk, i - 11)).map((m) => ({ m, ...monthSummary(fin.entries, m) }));
   const dPrev = delta(s.expense, prev.expense);
   const dAvg = delta(s.expense, avg6);
@@ -66,6 +67,17 @@ export default function ReportView() {
       )}
 
       <div className="card">
+        <div className="h3" style={{ marginBottom: 10 }}>Need · want · unnecessary</div>
+        <div style={{ display: "flex", height: 14, borderRadius: 7, overflow: "hidden", gap: 2, background: "var(--raised)" }}>
+          {Object.entries(needs).filter(([, v]) => v > 0).map(([k, v]) => (
+            <div key={k} title={NEED[k][0]} style={{ width: `${(v / (s.expense || 1)) * 100}%`, background: NEED[k][1] }} />
+          ))}
+        </div>
+        <Legend items={Object.entries(needs).map(([k, v]) => ({ name: `${NEED[k][0]} ${moneyShort(v)}`, color: NEED[k][1] }))} />
+        {needs.waste > 0 && <div className="xs muted" style={{ marginTop: 6 }}>Unnecessary spending = {Math.round((needs.waste / (s.expense || 1)) * 100)} % of this month.</div>}
+      </div>
+
+      <div className="card">
         <div className="h3" style={{ marginBottom: 10 }}>Good · neutral · bad</div>
         <div style={{ display: "flex", height: 14, borderRadius: 7, overflow: "hidden", gap: 2, background: "var(--raised)" }}>
           {Object.entries(ratings).filter(([, v]) => v > 0).map(([k, v]) => (
@@ -78,7 +90,7 @@ export default function ReportView() {
       <div className="card">
         <div className="h3" style={{ marginBottom: 8 }}>Biggest expenses</div>
         {biggest.length === 0 ? <div className="small muted">–</div> : biggest.map((e) => (
-          <div key={e.id} className="between small" style={{ padding: "4px 0" }}><span>{fmtShort(e.date)} · {e.note || e.cat}</span><b>{money(e.amount)}</b></div>
+          <div key={e.id} className="between small" style={{ padding: "4px 0" }}><span>{fmtShort(e.date)} · {e.note || e.cat}</span><b>{money(netAmount(e))}</b></div>
         ))}
       </div>
 

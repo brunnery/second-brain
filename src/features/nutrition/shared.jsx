@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Search, Plus } from "lucide-react";
 import { useNutrition } from "./store.js";
 import { FOODS, FOOD_CATS, foodById, macrosOf } from "./data/foods.js";
-import { MEALS, mealById, SLOT_NAMES } from "./data/meals.js";
+import { allMeals, mealById, SLOT_NAMES } from "./data/meals.js";
 import { mealMacros, itemGrams, scaleFor } from "./engine/nutrition.js";
 import { Sheet, Field, NumInput, Chips, toast } from "../../components/ui.jsx";
 import { uid } from "../../lib/uid.js";
@@ -67,7 +67,7 @@ export function AddFoodSheet({ onClose, date = today(), defaultSlot = "snack" })
   const [grams, setGrams] = useState(null);
   const [quick, setQuick] = useState({ name: "", kcal: null, p: null });
   const foods = useMemo(() => [...FOODS, ...n.customFoods].filter((f) => !q || f.name.toLowerCase().includes(q.toLowerCase())), [q, n.customFoods]);
-  const meals = useMemo(() => MEALS.filter((m) => !q || m.name.toLowerCase().includes(q.toLowerCase())), [q]);
+  const meals = useMemo(() => allMeals().filter((m) => !q || m.name.toLowerCase().includes(q.toLowerCase())), [q]);
 
   const addFood = () => {
     const g = grams ?? pick.portion.g;
@@ -138,21 +138,22 @@ export function AddFoodSheet({ onClose, date = today(), defaultSlot = "snack" })
 }
 
 /** Pick a different meal for a plan slot; portions rescale to the same calories. */
-export function MealSwapSheet({ slot, currentId, kcal, protein, onPick, onClose }) {
+export function MealSwapSheet({ slot, currentId, kcal, protein, onPick, onClose, onBuild }) {
   const [q, setQ] = useState("");
-  const list = MEALS.filter((m) => m.slots.includes(slot) && (!q || m.name.toLowerCase().includes(q.toLowerCase())));
+  const list = allMeals().filter((m) => m.slots.includes(slot) && (!q || m.name.toLowerCase().includes(q.toLowerCase())));
   return (
     <Sheet title={`Swap ${SLOT_NAMES[slot].toLowerCase()}`} onClose={onClose} area="food">
       <div className="stack">
         <input className="input" placeholder="Search meals…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search meals" />
-        <div className="xs faint">Portions are resized to ~{num(kcal)} kcal.</div>
+        <div className="xs faint">Portions are resized to ~{num(kcal)} kcal. ★ = my meals.</div>
+        {onBuild && <button className="btn sm" onClick={() => { onBuild(); onClose(); }}>+ Build from my ingredients</button>}
         <div className="card flush list">
           {list.map((m) => {
             const sc = scaleFor(m, kcal, protein);
             return (
               <button key={m.id} className="row" onClick={() => { onPick(m.id, sc); onClose(); }} style={m.id === currentId ? { background: "var(--raised)" } : undefined}>
                 <div className="grow">
-                  <div style={{ fontWeight: 600 }}>{m.name}</div>
+                  <div style={{ fontWeight: 600 }}>{m.mine ? "★ " : ""}{m.name}</div>
                   <MacroLine m={mealMacros(m, sc.pf, sc.cf)} small />
                 </div>
                 <span className="xs faint">{m.prep}′</span>

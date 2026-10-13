@@ -10,10 +10,11 @@ React + Vite, no backend except a single Supabase table for sync. Works offline.
 | **Today** | Today's lifting day, cardio suggestion, evening routine, calories/protein, creatine, money snapshot |
 | **Train → Lifts** | Weekly plan generated from goal + phase, editable (swap / add / reorder / sets × reps), one-off day moves, weekly volume check, 6-week blocks with deload |
 | **Workout logger** | Prefilled weights, double-progression hints, rest timer, PR detection |
-| **Train → Cardio** | Weekly suggestions for your machines (Stairmaster, Erg, bike, air bike, incline walk, run …), "other idea" shuffle, guided interval player, logging with kcal estimates |
+| **Train → Cardio** | Weekly suggestions for your machines (Stairmaster, Erg, bike, air bike, incline walk, run …), "other idea" shuffle, guided interval player, logging with kcal estimates. Whatever you log replaces that day's suggestion |
 | **Train → Mobility** | Back Mobility · Core & Stability · Stretching (accepted versions, unchanged) with guided player + streak |
 | **Train → Exercises** | ~170 exercises (muscles, equipment, spine load, cues) + your own |
-| **Food** | Calorie/macro targets from goal, 7-day meal plan (meal prep, budget), swap/lock/resize meals, logging, shopping list, food database + your own foods, weight-trend check-in |
+| **Food** | Calorie/macro targets from goal, 7-day plan from **your own meals** (or mix / new ideas), "cook something else" builder that sizes each ingredient to what's still open today, top-up (shake / nuts / oats) after the main meals, swap/lock/move/resize, logging, shopping list, food database + own foods, weight-trend check-in |
+| **Money – shared costs** | Mark each expense Need / Want / Unnecessary; split a bill with named people — ticking "paid back" reduces the expense; "Owed" tab |
 | **Money** | Expenses/income, good/neutral/bad categories with budgets + instant feedback, recurring items (auto-booked), accounts, savings goals, net worth, monthly & 12-month report |
 | **More** | Goals & setup, body weight, cloud sync, calendar (.ics download or live feed), backup, reset |
 

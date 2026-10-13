@@ -9,6 +9,8 @@ import { dayForDate } from "../training/engine/plan.js";
 import { startWorkout } from "../training/actions.js";
 import { useCardioWeek, useTargets } from "../coach.js";
 import { workoutById, CARDIO_TYPES, INTENTS } from "../cardio/data/cardio.js";
+import { matchLogs } from "../cardio/engine/cardio.js";
+import { logSummary } from "../cardio/CardioView.jsx";
 import { useRoutineToday, routineSteps } from "../routines/RoutinesView.jsx";
 import { mealById, SLOT_NAMES } from "../nutrition/data/meals.js";
 import { mealMacros } from "../nutrition/engine/nutrition.js";
@@ -54,9 +56,11 @@ export default function HomePage() {
   const doneToday = training.sessions.some((s) => s.date === d && s.finishedAt);
   const active = training.sessions.find((s) => s.id === training.activeId && !s.finishedAt);
   const cardioToday = week.filter((c) => c.date === d && !cardio.skipped[c.key]);
+  const cardioMatches = matchLogs(week, cardio.logs);
+  const cardioExtra = cardio.logs.filter((l) => l.date === d && !Object.values(cardioMatches).some((m) => m.id === l.id));
   const eaten = sumMacros(entries);
   const planDay = nutrition.plan?.days?.[dayIdx(d)];
-  const nextMeal = planDay?.meals.find((pm) => !entries.some((e) => e.planSi === pm.si && e.mealId === pm.mealId));
+  const nextMeal = planDay?.meals.find((pm) => !entries.some((e) => e.planSi === pm.si || (e.planSi == null && !e.topUp && e.slot === pm.slot)));
   const creatine = !!nutrition.creatine[d];
 
   const ws = weekStart(d);
@@ -104,19 +108,31 @@ export default function HomePage() {
 
       {cardioToday.map((c) => {
         const w = workoutById(c.workoutId);
-        const done = cardio.logs.some((l) => l.slotKey === c.key);
+        const log = cardioMatches[c.key];
+        const type = CARDIO_TYPES[log?.type || c.type] || CARDIO_TYPES.other;
         return (
           <button key={c.key} className="card tight press hstack area-cardio" style={{ width: "100%", textAlign: "left" }} onClick={() => go("train/cardio")}>
-            <span className="icon-tile" style={{ "--tile": CARDIO_TYPES[c.type].color }}><Flame size={18} /></span>
+            <span className="icon-tile" style={{ "--tile": type.color }}>{log ? <Check size={18} /> : <Flame size={18} />}</span>
             <div className="grow">
-              <div className="eyebrow">Cardio · {INTENTS[c.intent].name}</div>
-              <div className="h3">{w?.name} · {CARDIO_TYPES[c.type].name}</div>
-              <div className="xs muted">{w?.minutes} min — {w?.how}</div>
+              <div className="eyebrow">Cardio · {log ? "logged" : `suggestion · ${INTENTS[c.intent].name}`}</div>
+              <div className="h3">{log ? `${type.name}${log.note ? ` · ${log.note}` : ""}` : `${w?.name} · ${type.name}`}</div>
+              <div className="xs muted">{log ? logSummary(log) : `${w?.minutes} min — ${w?.how}`}</div>
             </div>
-            {done ? <Check size={18} color="var(--good)" /> : <ChevronRight size={18} className="faint" />}
+            <ChevronRight size={18} className="faint" />
           </button>
         );
       })}
+
+      {cardioExtra.map((l) => (
+        <button key={l.id} className="card tight press hstack area-cardio" style={{ width: "100%", textAlign: "left" }} onClick={() => go("train/cardio")}>
+          <span className="icon-tile" style={{ "--tile": CARDIO_TYPES[l.type]?.color }}><Check size={18} /></span>
+          <div className="grow">
+            <div className="eyebrow">Cardio · logged</div>
+            <div className="h3">{CARDIO_TYPES[l.type]?.name}{l.note ? ` · ${l.note}` : ""}</div>
+            <div className="xs muted">{logSummary(l)}</div>
+          </div>
+        </button>
+      ))}
 
       {/* evening routine */}
       <div className="card tight hstack area-mobility">

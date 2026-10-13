@@ -8,7 +8,7 @@
    ================================================================ */
 import { GOALS, LIFESTYLE } from "../../profile/goals.js";
 import { foodById, macrosOf, sumMacros } from "../data/foods.js";
-import { MEALS, mealById } from "../data/meals.js";
+import { MEALS, mealById, getUserMeals } from "../data/meals.js";
 
 export const bmr = ({ sex, weightKg, heightCm, age }) =>
   10 * weightKg + 6.25 * heightCm - 5 * age + (sex === "female" ? -161 : 5);
@@ -97,15 +97,19 @@ export function scaleFor(meal, kcal, protein = null, customFoods = []) {
   const C = part((i) => i[2] && !isProteinItem(i[0], customFoods));
   let pf = 1, cf = 1;
   if (protein != null && P.p > 0) pf = clamp((protein - fixed.p - C.p) / P.p, 0.6, 1.6);
-  if (C.kcal > 0) cf = clamp((kcal - fixed.kcal - pf * P.kcal) / C.kcal, 0.4, 2.6);
+  if (C.kcal > 0) cf = clamp((kcal - fixed.kcal - pf * P.kcal) / C.kcal, 0.4, 2.2);
   else if (P.kcal > 0) pf = clamp((kcal - fixed.kcal) / P.kcal, 0.5, 2.2);
   // if carbs hit a limit, let protein absorb the rest
   const total = fixed.kcal + pf * P.kcal + cf * C.kcal;
-  if (Math.abs(total - kcal) > 80 && P.kcal > 0) pf = clamp((kcal - fixed.kcal - cf * C.kcal) / P.kcal, 0.5, 2.2);
+  if (Math.abs(total - kcal) > 80 && P.kcal > 0) pf = clamp((kcal - fixed.kcal - cf * C.kcal) / P.kcal, 0.5, 1.8);
   return { pf: r05(pf), cf: r05(cf) };
 }
 
 const SPLIT = { breakfast: 0.25, lunch: 0.3, dinner: 0.3, snack: 0.15 };
+/* With "my meals" the three main meals cover ~85 % of the day; the rest is a computed top-up
+   (shake, nuts, oats …) so portions stay realistic. */
+export const MAIN_SHARE = { breakfast: 0.23, lunch: 0.31, dinner: 0.31 };
+export const MAIN_SLOTS = ["breakfast", "lunch", "dinner"];
 
 function rng(seed) {
   let s = seed % 2147483647 || 1;
@@ -116,49 +120,72 @@ const density = (meal) => { const m = mealMacros(meal); return m.kcal ? m.p / m.
 
 /**
  * Build a 7-day meal plan.
- * opts: { targets, seed, mealPrep (repeat lunches/dinners in 3-day blocks),
- *         maxCost (1–3), exclude: [mealId], prev: previous plan (locked meals are kept) }
+ * opts: { targets, seed, mealPrep (repeat lunches/dinners in 3-day blocks), maxCost (1–3),
+ *         source: "mine" (own meals + top-up) | "mix" | "ideas" (meal library + snacks),
+ *         exclude: [mealId], prev: previous plan (locked meals are kept) }
  */
-export function planWeek({ targets, seed = 1, mealPrep = true, maxCost = 2, exclude = [], prev = null }) {
+export function planWeek({ targets, seed = 1, mealPrep = true, maxCost = 2, source = "mine", exclude = [], prev = null }) {
   const rand = rng(seed);
   const tgtDensity = targets.protein / targets.kcal;
-  const snacks = targets.kcal >= 2900 ? 2 : 1;
+  const mine = getUserMeals();
+  const useMine = source !== "ideas" && mine.length > 0;
+  const snacks = useMine && source === "mine" ? 0 : targets.kcal >= 2900 ? 2 : 1;
   const slots = ["breakfast", "lunch", "dinner", ...Array(snacks).fill("snack")];
-  const pool = (slot) => MEALS.filter((x) => x.slots.includes(slot) && x.cost <= maxCost && !exclude.includes(x.id) && x.id !== "mensa");
+  const library = (slot) => MEALS.filter((x) => x.slots.includes(slot) && x.cost <= maxCost && !exclude.includes(x.id) && x.id !== "mensa");
+  const own = (slot) => mine.filter((x) => x.slots.includes(slot) && !exclude.includes(x.id));
+  const pool = (slot) => {
+    if (source === "mine" && own(slot).length) return own(slot);
+    if (source === "mix" && own(slot).length) return rand() < 0.65 ? own(slot) : library(slot);
+    return library(slot);
+  };
   const pick = (slot, avoid = [], batchOnly = false) => {
-    let list = pool(slot).filter((x) => !avoid.includes(x.id) && (!batchOnly || x.batch));
-    if (!list.length) list = pool(slot).filter((x) => !avoid.includes(x.id));
-    if (!list.length) list = pool(slot);
+    const base = pool(slot);
+    let list = base.filter((x) => !avoid.includes(x.id) && (!batchOnly || x.batch));
+    if (!list.length) list = base.filter((x) => !avoid.includes(x.id));
+    if (!list.length) list = base;
     // prefer meals whose protein density matches the day's target density
     const ranked = [...list].sort((a, b) => Math.abs(density(a) - tgtDensity) - Math.abs(density(b) - tgtDensity));
     const top = ranked.slice(0, Math.max(3, Math.ceil(ranked.length * 0.6)));
     return top[Math.floor(rand() * top.length)];
   };
+  const shareOf = (slot) => (snacks === 0 ? MAIN_SHARE[slot] : slot === "snack" ? SPLIT.snack / snacks : SPLIT[slot]);
 
   const blockChoice = {};
   const days = [];
   for (let d = 0; d < 7; d++) {
     const keep = prev?.days?.[d]?.meals || [];
     const used = [];
+    // fill slots in order; whatever one meal can't take (e.g. a fixed breakfast) moves to the next ones
+    let leftK = targets.kcal * slots.reduce((a, sl) => a + shareOf(sl), 0);
+    let leftP = targets.protein * slots.reduce((a, sl) => a + shareOf(sl), 0);
+    let leftShare = slots.reduce((a, sl) => a + shareOf(sl), 0);
     const meals = slots.map((slot, si) => {
       const locked = keep.find((k) => k.si === si && k.slot === slot && k.locked);
-      if (locked) { used.push(locked.mealId); return locked; }
-      let meal;
-      const block = d < 3 ? 0 : d < 6 ? 1 : 2;
-      if (mealPrep && (slot === "lunch" || slot === "dinner") && block < 2) {
-        const key = `${slot}-${block}`;
-        if (!blockChoice[key]) blockChoice[key] = pick(slot, [...used, ...Object.values(blockChoice)], true).id;
-        meal = mealById(blockChoice[key]);
+      let entry;
+      if (locked) {
+        used.push(locked.mealId);
+        entry = locked;
       } else {
-        meal = pick(slot, used);
+        let meal;
+        const block = d < 3 ? 0 : d < 6 ? 1 : 2;
+        if (mealPrep && (slot === "lunch" || slot === "dinner") && block < 2) {
+          const key = `${slot}-${block}`;
+          if (!blockChoice[key]) blockChoice[key] = pick(slot, [...used, ...Object.values(blockChoice)], true).id;
+          meal = mealById(blockChoice[key]);
+        } else {
+          meal = pick(slot, used);
+        }
+        used.push(meal.id);
+        const part = shareOf(slot) / leftShare;
+        entry = { si, slot, mealId: meal.id, ...scaleFor(meal, leftK * part, leftP * part), locked: false };
       }
-      used.push(meal.id);
-      const share = slot === "snack" ? SPLIT.snack / snacks : SPLIT[slot];
-      return { si, slot, mealId: meal.id, ...scaleFor(meal, targets.kcal * share, targets.protein * share), locked: false };
+      const m = mealMacros(mealById(entry.mealId), entry.pf, entry.cf);
+      leftK -= m.kcal; leftP -= m.p; leftShare -= shareOf(slot);
+      return entry;
     });
-    days.push({ meals: balanceProtein(meals, targets) });
+    days.push({ meals: snacks ? balanceProtein(meals, targets) : meals });
   }
-  return { generatedAt: new Date().toISOString(), seed, mealPrep, maxCost, days };
+  return { generatedAt: new Date().toISOString(), seed, mealPrep, maxCost, source, days };
 }
 
 /** Swap unlocked snacks so the day's protein lands within ~±15 % of target. */
@@ -177,6 +204,41 @@ function balanceProtein(meals, targets) {
     meals[i] = { ...meals[i], mealId: pick.id, ...sc };
   }
   return meals;
+}
+
+/**
+ * What to add to close the gap after the main meals.
+ * remaining: { kcal, p, c, f } still open. Returns [{ foodId, grams, why }] (may be empty).
+ * Order: protein first (whey), then fat (nuts), then carbs (oats / banana).
+ */
+export function topUp(remaining) {
+  const out = [];
+  let r = { ...remaining };
+  const add = (foodId, grams, why) => {
+    const g = Math.round(grams / 5) * 5;
+    if (g <= 0) return;
+    const m = macrosOf(foodById(foodId), g);
+    out.push({ foodId, grams: g, why, ...m });
+    r = { kcal: r.kcal - m.kcal, p: r.p - m.p, c: r.c - m.c, f: r.f - m.f };
+  };
+  if (r.p > 12) add("whey", Math.min(60, r.p / 0.78), "protein");
+  if (r.p > 12 && r.kcal > 250) add("milk-2", Math.min(400, (r.p / 3.4) * 100), "protein + carbs");
+  if (r.f > 8 && r.kcal > 120) add("mixed-nuts", Math.min(60, r.f / 0.54), "fat");
+  if (r.c > 25 && r.kcal > 150) {
+    if (r.c > 60) add("oats", Math.min(120, r.c / 0.59), "carbs");
+    else add("banana", Math.min(240, r.c / 0.21), "carbs");
+  }
+  return out;
+}
+
+/** kcal/protein for the next main meal, from what is still open today (slot-aware). */
+export function nextMealTarget(targets, eaten, mainsLeft, slot = "lunch", openSlots = null) {
+  const open = openSlots && openSlots.length ? openSlots : MAIN_SLOTS.slice(3 - Math.max(1, mainsLeft));
+  const total = open.reduce((a, s) => a + (MAIN_SHARE[s] || 0.25), 0) || 1;
+  const part = (MAIN_SHARE[slot] || 0.25) / total;
+  const kcal = Math.max(300, (targets.kcal * 0.85 - eaten.kcal) * part);
+  const protein = Math.max(20, (targets.protein * 0.85 - eaten.p) * part);
+  return { kcal, protein };
 }
 
 export function dayTotals(day, customFoods = []) {
