@@ -313,3 +313,26 @@ describe("shared expenses + necessity", () => {
     expect(t).toEqual({ need: 900, want: 45, waste: 0 });
   });
 });
+
+import { mealById as mealById3, setUserMeals as setUM, SEED_MY_MEALS as SEEDS, vegOf as vegOf3 } from "../features/nutrition/data/meals.js";
+import { planWeek as pw3, computeTargets as ct3 } from "../features/nutrition/engine/nutrition.js";
+describe("one vegetable per day", () => {
+  it("variant ids swap the vegetable", () => {
+    setUM(SEEDS);
+    const m = mealById3("my-pasta-chicken~broccoli");
+    expect(vegOf3(m)).toBe("broccoli");
+    expect(m.items.filter((i) => ["bell-pepper", "zucchini", "mushrooms"].includes(i[0]))).toHaveLength(0);
+    expect(m.name).toContain("broccoli");
+  });
+  it("lunch and dinner share a single vegetable each day", () => {
+    setUM(SEEDS);
+    const t = ct3({ sex: "male", weightKg: 85, heightCm: 182, age: 25, lifestyle: "mixed", goal: "bulk" });
+    const plan = pw3({ targets: t, seed: 2 });
+    for (const d of plan.days) {
+      const vegs = new Set(d.meals.filter((m) => m.slot !== "breakfast").map((m) => vegOf3(mealById3(m.mealId))));
+      expect(vegs.size).toBe(1);
+    }
+    expect(new Set(plan.days.map((d) => vegOf3(mealById3(d.meals[1].mealId)))).size).toBeGreaterThan(1);
+    setUM([]);
+  });
+});

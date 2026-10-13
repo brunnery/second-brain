@@ -124,20 +124,44 @@ let userMeals = [];
 export const setUserMeals = (list) => { userMeals = Array.isArray(list) ? list : []; };
 export const getUserMeals = () => userMeals;
 export const allMeals = () => [...userMeals, ...MEALS];
-export const mealById = (id) => userMeals.find((x) => x.id === id) || MEALS.find((x) => x.id === id) || null;
 
-/** Starting set of "my meals" — what is usually cooked at home. Editable in the app. */
-const VEG = [["bell-pepper", 100, false], ["zucchini", 100, false], ["broccoli", 100, false], ["mushrooms", 75, false], ["olive-oil", 10, false]];
+/* Veg variants: "my-pasta-chicken~zucchini" = that meal with its vegetable swapped.
+   Lets the planner use ONE vegetable per day for both lunch and dinner. */
+export const VEG_FOODS = ["bell-pepper", "zucchini", "broccoli", "mushrooms", "spinach", "green-beans", "frozen-veg", "carrot", "tomato"];
+const VEG_NAMES = { "bell-pepper": "peppers", zucchini: "zucchini", broccoli: "broccoli", mushrooms: "mushrooms", spinach: "spinach", "green-beans": "green beans", "frozen-veg": "mixed veg", carrot: "carrots", tomato: "tomatoes" };
+export const vegOf = (meal) => meal?.items.find((i) => VEG_FOODS.includes(i[0]))?.[0] || null;
+export const vegName = (id) => VEG_NAMES[id] || id;
+export const withVeg = (mealId, veg) => `${mealId.split("~")[0]}~${veg}`;
+
+const baseMeal = (id) => userMeals.find((x) => x.id === id) || MEALS.find((x) => x.id === id) || null;
+export const mealById = (id) => {
+  if (!id) return null;
+  if (!id.includes("~")) return baseMeal(id);
+  const [base, veg] = id.split("~");
+  const m = baseMeal(base);
+  if (!m) return null;
+  const cur = vegOf(m);
+  if (!cur || cur === veg) return m;
+  return {
+    ...m, id,
+    name: `${m.name.replace(new RegExp(`\\s*(&|with|·)\\s*${vegName(cur)}$`, "i"), "")} & ${vegName(veg)}`,
+    items: m.items.map((it) => (it[0] === cur ? [veg, it[1], it[2]] : it)),
+  };
+};
+
+/** Starting set of "my meals" — what is usually cooked at home. One vegetable each; the
+    planner swaps it so a day has a single vegetable. Editable in the app. */
+const OIL = ["olive-oil", 10, false];
 export const SEED_MY_MEALS = [
   { id: "my-toast-egg", name: "Toast, egg & chicken cold cuts", slots: ["breakfast"], prep: 8, batch: false, cost: 1, mine: true,
     items: [["wholegrain-bread", 100, false], ["egg", 60, false], ["chicken-cold-cuts", 50, true]], how: "2 slices wholegrain toast, 1 egg, chicken cold cuts." },
-  { id: "my-pasta-chicken", name: "Pasta, chicken & veg", slots: ["lunch", "dinner"], prep: 20, batch: true, cost: 1, mine: true,
-    items: [["pasta", 100, true], ["chicken-breast", 150, true], ...VEG], how: "Pan-fry chicken and veg, toss with pasta." },
-  { id: "my-rice-chicken", name: "Rice, chicken & veg", slots: ["lunch", "dinner"], prep: 20, batch: true, cost: 1, mine: true,
-    items: [["rice", 80, true], ["chicken-breast", 150, true], ...VEG], how: "Rice cooker + pan: chicken and veg." },
-  { id: "my-pasta-mince", name: "Pasta, mince & veg", slots: ["lunch", "dinner"], prep: 20, batch: true, cost: 1, mine: true,
-    items: [["pasta", 100, true], ["beef-mince-5", 150, true], ...VEG], how: "Brown the mince with the veg, mix with pasta." },
-  { id: "my-rice-mince", name: "Rice, mince & veg", slots: ["lunch", "dinner"], prep: 20, batch: true, cost: 1, mine: true,
-    items: [["rice", 80, true], ["beef-mince-5", 150, true], ...VEG], how: "Brown the mince with the veg, serve with rice." },
+  { id: "my-pasta-chicken", name: "Pasta, chicken & peppers", slots: ["lunch", "dinner"], prep: 20, batch: true, cost: 1, mine: true,
+    items: [["pasta", 100, true], ["chicken-breast", 150, true], ["bell-pepper", 150, false], OIL], how: "Pan-fry chicken and veg, toss with pasta." },
+  { id: "my-rice-chicken", name: "Rice, chicken & broccoli", slots: ["lunch", "dinner"], prep: 20, batch: true, cost: 1, mine: true,
+    items: [["rice", 80, true], ["chicken-breast", 150, true], ["broccoli", 150, false], OIL], how: "Rice cooker + pan: chicken and veg." },
+  { id: "my-pasta-mince", name: "Pasta, mince & zucchini", slots: ["lunch", "dinner"], prep: 20, batch: true, cost: 1, mine: true,
+    items: [["pasta", 100, true], ["beef-mince-5", 150, true], ["zucchini", 150, false], OIL], how: "Brown the mince with the veg, mix with pasta." },
+  { id: "my-rice-mince", name: "Rice, mince & mushrooms", slots: ["lunch", "dinner"], prep: 20, batch: true, cost: 1, mine: true,
+    items: [["rice", 80, true], ["beef-mince-5", 150, true], ["mushrooms", 150, false], OIL], how: "Brown the mince with the veg, serve with rice." },
 ];
 export const SLOT_NAMES = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" };

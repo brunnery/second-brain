@@ -8,7 +8,7 @@
    ================================================================ */
 import { GOALS, LIFESTYLE } from "../../profile/goals.js";
 import { foodById, macrosOf, sumMacros } from "../data/foods.js";
-import { MEALS, mealById, getUserMeals } from "../data/meals.js";
+import { MEALS, mealById, getUserMeals, vegOf, withVeg } from "../data/meals.js";
 
 export const bmr = ({ sex, weightKg, heightCm, age }) =>
   10 * weightKg + 6.25 * heightCm - 5 * age + (sex === "female" ? -161 : 5);
@@ -148,6 +148,9 @@ export function planWeek({ targets, seed = 1, mealPrep = true, maxCost = 2, sour
     const top = ranked.slice(0, Math.max(3, Math.ceil(ranked.length * 0.6)));
     return top[Math.floor(rand() * top.length)];
   };
+  // one vegetable per day (for the user's own meals): rotate through the veg they use
+  const vegs = [...new Set(mine.map(vegOf).filter(Boolean))];
+  const dayVeg = (d) => (vegs.length ? vegs[(d + seed) % vegs.length] : null);
   const shareOf = (slot) => (snacks === 0 ? MAIN_SHARE[slot] : slot === "snack" ? SPLIT.snack / snacks : SPLIT[slot]);
 
   const blockChoice = {};
@@ -176,6 +179,7 @@ export function planWeek({ targets, seed = 1, mealPrep = true, maxCost = 2, sour
           meal = pick(slot, used);
         }
         used.push(meal.id);
+        if (meal.mine && vegOf(meal) && dayVeg(d) && slot !== "breakfast") meal = mealById(withVeg(meal.id, dayVeg(d)));
         const part = shareOf(slot) / leftShare;
         entry = { si, slot, mealId: meal.id, ...scaleFor(meal, leftK * part, leftP * part), locked: false };
       }

@@ -9,6 +9,7 @@ import { useProfile, ageOf } from "./profile/store.js";
 import { useTraining } from "./training/store.js";
 import { useCardio } from "./cardio/store.js";
 import { useRoutines } from "./routines/store.js";
+import { SEED_MY_MEALS, VEG_FOODS } from "./nutrition/data/meals.js";
 import { useBody, latestWeight } from "./body/store.js";
 import { useNutrition } from "./nutrition/store.js";
 import { generatePlan } from "./training/engine/plan.js";
@@ -170,6 +171,13 @@ export function useMigrations() {
     const n = getState("nutrition");
     const p = getState("profile");
     // v2.1: meal plans built from "my meals" — rebuild an old plan once (locked meals kept)
+    // v2.2: seed meals had all four vegetables — replace with the one-veg versions
+    const seedIds = new Set(SEED_MY_MEALS.map((m) => m.id));
+    const oldSeeds = (n.myMeals || []).filter((m) => seedIds.has(m.id) && m.items.filter((i) => VEG_FOODS.includes(i[0])).length >= 3);
+    if (p.onboarded && oldSeeds.length) {
+      setState("nutrition", (x) => ({ ...x, myMeals: x.myMeals.map((m) => (oldSeeds.some((o) => o.id === m.id) ? SEED_MY_MEALS.find((sm) => sm.id === m.id) : m)) }), { silent: true });
+      rebuildPlans({ training: false, meals: true, keepLocked: false, silent: true });
+    }
     if (p.onboarded && n.plan && n.planSettings && n.planSettings.source === undefined) {
       // silent: never mark local data as "newer" here, so a stale device can't overwrite the cloud
       setState("nutrition", (x) => ({ ...x, planSettings: { ...x.planSettings, source: "mine" } }), { silent: true });
