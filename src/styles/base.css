@@ -267,3 +267,6 @@ textarea.input { min-height: 80px; resize: vertical; }
 @media (min-width: 700px) {
   .app { padding-top: calc(var(--safe-top) + 24px); }
 }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

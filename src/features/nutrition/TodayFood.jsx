@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Plus, Replace, Trash2, Pill, TrendingUp, ChevronDown, ChevronUp, Info, ChefHat, Sparkles } from "lucide-react";
+import { Camera, Check, Plus, Replace, Trash2, Pill, TrendingUp, ChevronDown, ChevronUp, Info, ChefHat, Sparkles } from "lucide-react";
 import { useNutrition } from "./store.js";
 import { useProfile } from "../profile/store.js";
 import { GOALS } from "../profile/goals.js";
@@ -109,7 +109,7 @@ export default function TodayFood() {
         <CheckBox on={creatine} label="Creatine taken" onClick={() => setN((x) => ({ ...x, creatine: { ...x.creatine, [today()]: !creatine } }))} />
       </div>
 
-      <div className="between"><h2 className="h2">Today</h2><div className="hstack" style={{ gap: 6 }}><button className="btn sm" onClick={() => setCook({ pm: null, initial: {} })}><ChefHat size={14} /> Meal</button><button className="btn sm" onClick={() => setAdding("snack")}><Plus size={14} /> Food</button></div></div>
+      <div className="between"><h2 className="h2">Today</h2><div className="hstack" style={{ gap: 6 }}><button className="btn sm" onClick={() => setCook({ pm: null, initial: {} })}><ChefHat size={14} /> Meal</button><button className="btn sm" onClick={() => setAdding("snack")}><Plus size={14} /> Food</button><button className="btn sm" aria-label="Scan nutrition label" onClick={() => setAdding("scan")}><Camera size={14} /></button></div></div>
       {!planDay && (
         <Note icon={Info}>No meal plan yet. <button className="btn sm primary" style={{ marginLeft: 6 }} onClick={() => rebuildPlans({ training: false })}>Build meal plan</button></Note>
       )}
@@ -201,7 +201,7 @@ export default function TodayFood() {
           onClose={() => setCook(null)}
           onDone={(r) => { add(builderEntry(r, cook.pm ? { planSi: cook.pm.si } : {})); toast(`${r.name} logged · ${num(r.macros.kcal)} kcal`); }} />
       )}
-      {adding && <AddFoodSheet defaultSlot={adding} onClose={() => setAdding(null)} />}
+      {adding && <AddFoodSheet defaultSlot={adding === "scan" ? "snack" : adding} defaultMode={adding === "scan" ? "scan" : "food"} onClose={() => setAdding(null)} />}
       {swap && (
         <MealSwapSheet slot={swap.pm.slot} currentId={swap.pm.mealId} kcal={swap.kcal} protein={swap.protein} onClose={() => setSwap(null)}
           onPick={(mealId, sc) => { setPlanMeal(swap.pm.si, { mealId, ...sc, locked: true }); toast("Swapped — locked so it stays when the plan is rebuilt"); }} />

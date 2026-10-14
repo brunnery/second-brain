@@ -4,6 +4,7 @@ import { suggestNext, e1rm, historyOf } from "../features/training/engine/progre
 import { planCardio, estimateKcal, weeklyIntents } from "../features/cardio/engine/cardio.js";
 import { computeTargets, planWeek, dayTotals, shoppingList, checkIn, weeklyRate, scaleFor } from "../features/nutrition/engine/nutrition.js";
 import { mealById, MEALS } from "../features/nutrition/data/meals.js";
+import { parseLabel, labelWarning, labelMacros } from "../features/nutrition/engine/label.js";
 import { EXERCISES } from "../features/training/data/exercises.js";
 import { FOODS } from "../features/nutrition/data/foods.js";
 import { routineStreak, DEFAULT_SCHEDULE } from "../features/routines/programs.js";
@@ -334,5 +335,103 @@ describe("one vegetable per day", () => {
     }
     expect(new Set(plan.days.map((d) => vegOf3(mealById3(d.meals[1].mealId)))).size).toBeGreaterThan(1);
     setUM([]);
+  });
+});
+
+describe("nutrition label scan", () => {
+  const near = (a, b, tol = 0.01) => expect(Math.abs(a - b)).toBeLessThanOrEqual(tol);
+  it("reads a bilingual Swiss label (per 100 g column first)", () => {
+    const r = parseLabel(`Nährwerte / Valeurs nutritives   pro 100 g   pro Portion (40 g)
+Energie / Énergie 1550 kJ (370 kcal) 620 kJ (148 kcal)
+Fett / Matières grasses 12 g 4.8 g
+davon gesättigte Fettsäuren / dont acides gras saturés 3,5 g 1,4 g
+Kohlenhydrate / Glucides 50 g 20 g
+davon Zucker / dont sucres 12 g 4.8 g
+Ballaststoffe / Fibres alimentaires 5 g 2 g
+Eiweiss / Protéines 10 g 4 g
+Salz / Sel 0.5 g 0.2 g`);
+    expect(r.kcal).toBe(370);
+    expect(r.f).toBe(12);
+    expect(r.c).toBe(50);
+    expect(r.p).toBe(10);
+    expect(r.basis).toBe("100g");
+    expect(r.warning).toBeNull();
+  });
+  it("converts kJ, reads decimals with commas and wrapped values", () => {
+    const r = parseLabel(`Energie 418 kJ
+Fett
+0,5 g
+Kohlenhydrate 4,0 g
+davon Zucker 4,0 g
+Eiweiss 11 g`);
+    expect(r.kcal).toBe(100);
+    near(r.f, 0.5);
+    near(r.c, 4);
+    expect(r.p).toBe(11);
+  });
+  it("handles OCR noise: 'O' for zero, '<' values and '12g' read as '129'", () => {
+    const r = parseLabel(`energy 7OO kj / 167 kcal
+fat <0.5 g
+carbohydrate 129
+of which sugars 3 g
+protein 1O g`);
+    expect(r.kcal).toBe(167);
+    near(r.f, 0.5);
+    expect(r.c).toBe(12);
+    expect(r.p).toBe(10);
+  });
+  it("reads unit-less kJ/kcal columns and Italian keywords", () => {
+    const r = parseLabel(`kJ / kcal
+Energia 1550 370
+Grassi 12 g
+di cui acidi grassi saturi 2 g
+Carboidrati 50 g
+Proteine 10 g`);
+    expect(r.kcal).toBe(370);
+    expect([r.f, r.c, r.p]).toEqual([12, 50, 10]);
+  });
+  it("flags missing or inconsistent values", () => {
+    expect(labelWarning({ kcal: 370, p: 10, c: null, f: 12 })).toMatch(/Not all/);
+    expect(labelWarning({ kcal: 100, p: 10, c: 50, f: 12 })).toMatch(/kcal/);
+    expect(labelWarning({ kcal: 370, p: 60, c: 50, f: 12 })).toMatch(/100 g/);
+    expect(parseLabel("random text without numbers").found).toEqual([]);
+  });
+  it("scales macros to the amount eaten", () => {
+    expect(labelMacros({ kcal: 370, p: 10, c: 50, f: 12 }, 40)).toEqual({ kcal: 148, p: 4, c: 20, f: 4.8 });
+    expect(labelMacros({ kcal: 148, p: 4, c: 20, f: 4.8 }, 80, 40)).toEqual({ kcal: 296, p: 8, c: 40, f: 9.6 });
+  });
+});
+
+describe("nutrition label scan — OCR unit/decimal mix-ups", () => {
+  it("uses the kcal to decide between '79' and '7g'", () => {
+    // real values: P 7, C 60, F 3 → 4·7 + 4·60 + 9·3 = 295 kcal
+    const r = parseLabel("Energie 1234 kJ / 295 kcal\nFett 39\nKohlenhydrate 60 g\nEiweiss 79");
+    expect([r.p, r.c, r.f]).toEqual([7, 60, 3]);
+  });
+  it("restores a dropped decimal point ('3.5g' → '359')", () => {
+    // P 20, C 2, F 3.5 → 80 + 8 + 31.5 ≈ 120 kcal
+    const r = parseLabel("Energie 502 kJ / 120 kcal\nFett 359\nKohlenhydrate 2 g\nEiweiss 20 g");
+    expect(r.f).toBe(3.5);
+  });
+  it("keeps a real 9 when it fits the kcal", () => {
+    // P 19, C 0, F 1.5 → 76 + 13.5 ≈ 90 kcal
+    const r = parseLabel("Energie 377 kJ / 90 kcal\nFett 1.5 g\nKohlenhydrate 0 g\nEiweiss 19");
+    expect(r.p).toBe(19);
+  });
+});
+
+describe("nutrition label scan — real OCR output", () => {
+  it("reads Tesseract output of a greyscale label photo ('129g' for '12 g')", () => {
+    const r = parseLabel(`Nährwerte / Valeurs nutritives pro 100 g pro Portion (40 g)
+Energie / Energie 1550 kJ (370 kcal) 620 kJ (148 kcal)
+Fett / Matières grasses 129g 4.89
+davon gesättigte Fettsäuren 3.5g 1.49
+Kohlenhydrate / Glucides 50g 20g
+davon Zucker / dont sucres 129 489
+Ballaststoffe / Fibres 59g 29
+Eiweiss / Protéines 10g 49
+Salz / Sel 0.5g 0.29`);
+    expect([r.kcal, r.p, r.c, r.f]).toEqual([370, 10, 50, 12]);
+    expect(r.warning).toBeNull();
   });
 });

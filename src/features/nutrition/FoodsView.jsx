@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Search, Plus, ChefHat } from "lucide-react";
+import { Search, Plus, ChefHat, Camera } from "lucide-react";
+import { useLabelScan, ScanStatus } from "./ScanLabel.jsx";
 import MealBuilder from "./MealBuilder.jsx";
 import { SLOT_NAMES } from "./data/meals.js";
 import { useNutrition } from "./store.js";
@@ -13,6 +14,8 @@ function CustomFoodSheet({ onClose }) {
   const [, setN] = useNutrition();
   const [f, setF] = useState({ name: "", cat: "protein", kcal: null, p: null, c: null, fat: null, g: 100, label: "1 portion" });
   const ok = f.name.trim() && f.kcal != null;
+  // fill the per-100 g fields from a label photo (only 100 g columns are read; check before saving)
+  const scan = useLabelScan((r) => r && setF((x) => ({ ...x, kcal: r.kcal ?? x.kcal, p: r.p ?? x.p, c: r.c ?? x.c, fat: r.f ?? x.fat, g: r.portionG || x.g })));
   const save = () => {
     const food = { id: `custom-${uid()}`, name: f.name.trim(), cat: f.cat, per100: { kcal: f.kcal, p: f.p || 0, c: f.c || 0, f: f.fat || 0, fib: 0 }, portion: { g: f.g || 100, label: f.label }, cost: 2, custom: true };
     setN((x) => ({ ...x, customFoods: [...x.customFoods, food] }));
@@ -22,6 +25,9 @@ function CustomFoodSheet({ onClose }) {
   return (
     <Sheet title="New food (per 100 g)" onClose={onClose} area="food">
       <div className="stack">
+        {scan.input}
+        <button className="btn" disabled={scan.busy} onClick={scan.open}><Camera size={16} /> Fill from label photo</button>
+        <ScanStatus scan={scan} />
         <Field label="Name"><input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="From the label" /></Field>
         <Field label="Category">
           <select className="input" value={f.cat} onChange={(e) => setF({ ...f, cat: e.target.value })}>

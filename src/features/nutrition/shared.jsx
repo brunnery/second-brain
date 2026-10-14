@@ -1,6 +1,7 @@
 /* Shared nutrition helpers + small components. */
 import { useMemo, useState } from "react";
 import { Search, Plus } from "lucide-react";
+import { LabelScan } from "./ScanLabel.jsx";
 import { useNutrition } from "./store.js";
 import { FOODS, FOOD_CATS, foodById, macrosOf } from "./data/foods.js";
 import { allMeals, mealById, SLOT_NAMES } from "./data/meals.js";
@@ -57,10 +58,10 @@ export function useFoodLog(date = today()) {
   return { entries, add, remove, addMeal };
 }
 
-export function AddFoodSheet({ onClose, date = today(), defaultSlot = "snack" }) {
+export function AddFoodSheet({ onClose, date = today(), defaultSlot = "snack", defaultMode = "food" }) {
   const [n] = useNutrition();
   const { add, addMeal } = useFoodLog(date);
-  const [mode, setMode] = useState("food");
+  const [mode, setMode] = useState(defaultMode);
   const [q, setQ] = useState("");
   const [slot, setSlot] = useState(defaultSlot);
   const [pick, setPick] = useState(null);
@@ -81,8 +82,9 @@ export function AddFoodSheet({ onClose, date = today(), defaultSlot = "snack" })
     <Sheet title="Add food" onClose={onClose} area="food">
       <div className="stack">
         <Chips value={slot} onChange={setSlot} options={Object.entries(SLOT_NAMES)} />
-        <Chips value={mode} onChange={(v) => { setMode(v); setPick(null); }} options={[["food", "Food"], ["meal", "Meal"], ["quick", "Quick add"]]} />
-        {mode !== "quick" && !pick && (
+        <Chips value={mode} onChange={(v) => { setMode(v); setPick(null); }} options={[["food", "Food"], ["meal", "Meal"], ["scan", "Scan label"], ["quick", "Quick add"]]} />
+        {mode === "scan" && <LabelScan onLog={(e) => { add({ slot, ...e }); onClose(); }} />}
+        {(mode === "food" || mode === "meal") && !pick && (
           <div className="hstack" style={{ position: "relative" }}>
             <Search size={17} className="faint" style={{ position: "absolute", left: 12 }} />
             <input className="input" style={{ paddingLeft: 36 }} placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus aria-label="Search food" />
