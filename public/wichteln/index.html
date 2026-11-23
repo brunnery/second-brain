@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wichtel-Check 🎁</title>
+<style>
+  :root { --red:#b3261e; --green:#1e6b3a; --bg:#fbf7f2; --ink:#222; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); padding:20px; }
+  .card { background:#fff; max-width:420px; width:100%; padding:28px 24px; border-radius:16px;
+          box-shadow:0 6px 24px rgba(0,0,0,.08); border-top:6px solid var(--red); }
+  h1 { margin:0 0 6px; font-size:1.5rem; }
+  p.sub { margin:0 0 22px; color:#555; line-height:1.4; font-size:.95rem; }
+  label { display:block; font-weight:600; margin:14px 0 6px; }
+  input { width:100%; padding:12px; font-size:1.05rem; border:1.5px solid #ccc; border-radius:10px; }
+  input:focus { outline:none; border-color:var(--green); }
+  button { margin-top:22px; width:100%; padding:14px; font-size:1.05rem; font-weight:600; color:#fff;
+           background:var(--green); border:0; border-radius:10px; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:default; }
+  .msg { margin-top:16px; padding:12px; border-radius:10px; font-size:.95rem; display:none; }
+  .msg.err { display:block; background:#fdecea; color:var(--red); }
+  .msg.ok { display:block; background:#e8f5ec; color:var(--green); }
+  .done { text-align:center; font-size:1.1rem; line-height:1.5; }
+  .done .big { font-size:3rem; }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <h1>🎁 Wichtel-Check</h1>
+  <p class="sub">Trag kurz ein, wer du bist und wen du beschenkst. Niemand kann sehen, wer wen hat – es wird nur geprüft, ob jede Person genau einmal vorkommt.</p>
+  <form id="f" autocomplete="off">
+    <label for="giver">Dein Name</label>
+    <input id="giver" required placeholder="z.B. Anna">
+    <label for="receiver">Du beschenkst …</label>
+    <input id="receiver" required placeholder="Name wie auf deinem Zettel">
+    <button id="btn" type="submit">Absenden</button>
+    <div class="msg" id="msg"></div>
+  </form>
+</div>
+<script>
+const URL_ = "https://lsnmenyymqvzcclqqvph.supabase.co";
+const KEY = "sb_publishable_KGSB2nZ9UmKj0ayRZF3jrA_iN0G7dMd";
+const f = document.getElementById('f'), msg = document.getElementById('msg'), btn = document.getElementById('btn');
+function show(t, cls){ msg.textContent = t; msg.className = 'msg ' + cls; }
+f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const g = document.getElementById('giver').value.trim();
+  const r = document.getElementById('receiver').value.trim();
+  if (!g || !r) return show('Bitte beide Felder ausfüllen.', 'err');
+  if (g.toLowerCase() === r.toLowerCase()) return show('Du kannst dich nicht selbst beschenken – schau nochmal auf deinen Zettel 🙂', 'err');
+  btn.disabled = true; btn.textContent = 'Wird gesendet …';
+  try {
+    const res = await fetch(URL_ + '/rest/v1/rpc/wichteln_submit', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', apikey: KEY, Authorization: 'Bearer ' + KEY },
+      body: JSON.stringify({ p_giver: g, p_receiver: r })
+    });
+    const out = await res.json();
+    if (out === 'ok') {
+      document.getElementById('card').innerHTML =
+        '<div class="done"><div class="big">✅</div><p><b>Danke, ' + g.replace(/[<>&]/g,'') + '!</b><br>Dein Eintrag ist gespeichert.<br>Du kannst die Seite jetzt schliessen.</p></div>';
+      return;
+    }
+    if (out === 'duplicate') show('Für diesen Namen gibt es schon einen Eintrag. Falls das ein Fehler war, melde dich beim Organisator.', 'err');
+    else if (out === 'self') show('Du kannst dich nicht selbst beschenken.', 'err');
+    else show('Da ist etwas schiefgelaufen. Bitte später nochmal versuchen.', 'err');
+  } catch (err) {
+    show('Keine Verbindung. Bitte später nochmal versuchen.', 'err');
+  }
+  btn.disabled = false; btn.textContent = 'Absenden';
+});
+</script>
+</body>
+</html>
