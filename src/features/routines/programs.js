@@ -57,7 +57,33 @@ export const ROUTINES = {
 /* Mon … Sun — null = rest evening */
 export const DEFAULT_SCHEDULE = ["back", "core", "mobility", null, null, "back", "core"];
 
-export const routineMinutes = (r) => Math.round(r.exercises.reduce((a, e) => a + e.sec, 0) / 60 * 10) / 10;
+/** Seconds between two exercises to get into position (user request, Nov 2026). */
+export const TRANSITION_SEC = 5;
+
+/** Player steps: every exercise, with a short "get ready" step before each one after the first.
+    Exercise timings stay exactly as accepted — the transition is added on top. */
+export function routineSteps(rt, gap = TRANSITION_SEC) {
+  const steps = [];
+  rt.exercises.forEach((e, i) => {
+    if (i > 0 && gap > 0) steps.push({ label: e.name, sec: gap, img: e.img, desc: e.desc, prep: true });
+    steps.push({ label: e.name, sec: e.sec, img: e.img, desc: e.desc });
+  });
+  return steps;
+}
+
+export const routineMinutes = (r, gap = TRANSITION_SEC) =>
+  Math.round((r.exercises.reduce((a, e) => a + e.sec, 0) + Math.max(0, r.exercises.length - 1) * gap) / 60 * 10) / 10;
+
+/** Put a routine (or null = rest) on one weekday (0 = Mon). */
+export const assignDay = (schedule, day, routineId) => schedule.map((s, i) => (i === day ? routineId ?? null : s));
+
+/** Drag one weekday onto another: the two evenings swap. */
+export function swapDays(schedule, from, to) {
+  if (from === to) return schedule;
+  const next = [...schedule];
+  [next[from], next[to]] = [schedule[to], schedule[from]];
+  return next;
+}
 
 /** Consecutive scheduled evenings completed; unscheduled evenings never break the streak. */
 export function routineStreak(done, schedule, from = today()) {

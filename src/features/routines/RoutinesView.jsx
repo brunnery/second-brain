@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Play, Check, Moon, Flame } from "lucide-react";
 import { useRoutines } from "./store.js";
-import { ROUTINES, routineMinutes, routineStreak } from "./programs.js";
+import { ROUTINES, routineMinutes, routineStreak, routineSteps, TRANSITION_SEC } from "./programs.js";
+import WeekPlanner from "./WeekPlanner.jsx";
 import { useProfile } from "../profile/store.js";
 import StepPlayer from "../../components/StepPlayer.jsx";
 import { Chips, Field } from "../../components/ui.jsx";
@@ -19,7 +20,7 @@ export function useRoutineToday() {
   return { routine: id ? ROUTINES[id] : null, done: !!r.done[today()], streak: routineStreak(r.done, r.schedule), markDone, toggle };
 }
 
-export const routineSteps = (rt) => rt.exercises.map((e) => ({ label: e.name, sec: e.sec, img: e.img, desc: e.desc }));
+export { routineSteps };
 
 export default function RoutinesView() {
   const [r, setR] = useRoutines();
@@ -74,7 +75,7 @@ export default function RoutinesView() {
             <div className="between" style={{ padding: "14px 16px 6px" }}>
               <div>
                 <div className="h3">{rt.name}</div>
-                <div className="xs muted">{rt.tagline} · {rt.exercises.length} exercises · {routineMinutes(rt)} min</div>
+                <div className="xs muted">{rt.tagline} · {rt.exercises.length} exercises · {routineMinutes(rt)} min incl. {TRANSITION_SEC} s switches</div>
               </div>
               <button className="btn sm primary" onClick={() => setPlaying(rt.id)}><Play size={14} /> Start</button>
             </div>
@@ -94,16 +95,7 @@ export default function RoutinesView() {
       })()}
 
       <Field label="Weekly schedule">
-        <div className="card flush list">
-          {WEEKDAYS.map((w, i) => (
-            <div key={w} className="row">
-              <span className="small" style={{ width: 40, fontWeight: 700 }}>{w}</span>
-              <Chips value={r.schedule[i] ?? "none"}
-                onChange={(v) => setR((x) => ({ ...x, schedule: x.schedule.map((s, k) => (k === i ? (v === "none" ? null : v) : s)) }))}
-                options={[["none", "Rest"], ...Object.values(ROUTINES).map((x) => [x.id, x.name.split(" ")[0]])]} />
-            </div>
-          ))}
-        </div>
+        <WeekPlanner schedule={r.schedule} onChange={(schedule) => setR((x) => ({ ...x, schedule }))} />
       </Field>
 
       {playing && (

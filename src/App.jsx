@@ -1,21 +1,17 @@
-import { Home, Dumbbell, UtensilsCrossed, Wallet, Menu } from "lucide-react";
+import { Home, Moon, Menu } from "lucide-react";
 import { useRoute, go } from "./app/router.js";
 import { ToastHost } from "./components/ui.jsx";
 import { useProfile } from "./features/profile/store.js";
 import Onboarding from "./features/profile/Onboarding.jsx";
-import HomePage from "./features/home/HomePage.jsx";
-import TrainPage from "./features/training/TrainPage.jsx";
-import FoodPage from "./features/nutrition/FoodPage.jsx";
-import MoneyPage from "./features/finance/MoneyPage.jsx";
+import TodayPage from "./features/today/TodayPage.jsx";
+import RoutinesView from "./features/routines/RoutinesView.jsx";
+import { PageHead } from "./components/ui.jsx";
 import MorePage from "./features/settings/MorePage.jsx";
 import { useFeedSnapshot, useMigrations } from "./features/coach.js";
-import { useRecurringAutobook } from "./features/finance/MoneyPage.jsx";
 
 const TABS = [
   { key: "home", label: "Today", Icon: Home, color: "var(--text)" },
-  { key: "train", label: "Train", Icon: Dumbbell, color: "var(--train)" },
-  { key: "food", label: "Food", Icon: UtensilsCrossed, color: "var(--food)" },
-  { key: "money", label: "Money", Icon: Wallet, color: "var(--money)" },
+  { key: "routines", label: "Routines", Icon: Moon, color: "var(--mobility)" },
   { key: "more", label: "More", Icon: Menu, color: "var(--text)" },
 ];
 
@@ -25,16 +21,14 @@ export default function App() {
   const [section, ...rest] = route;
   useFeedSnapshot();
   useMigrations();
-  useRecurringAutobook();
 
   if (!profile.onboarded) return <Onboarding />;
 
   let page;
-  if (section === "train") page = <TrainPage route={rest} />;
-  else if (section === "food") page = <FoodPage route={rest} />;
-  else if (section === "money") page = <MoneyPage route={rest} />;
+  // Simplified app (Nov 2026): Train / Food / Money tabs are hidden, their code and data stay.
+  if (section === "routines" || (section === "train" && rest[0] === "mobility")) page = <><PageHead eyebrow="Evenings" title="Routines" /><RoutinesView /></>;
   else if (section === "more") page = <MorePage route={rest} />;
-  else page = <HomePage />;
+  else page = <TodayPage />;
 
   const active = TABS.find((t) => t.key === section)?.key || "home";
 

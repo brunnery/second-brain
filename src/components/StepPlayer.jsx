@@ -1,6 +1,8 @@
 /* Full-screen guided timer used by evening routines and cardio intervals.
    Countdown ring, current + next step, pause / back / skip, 3-2-1 beeps,
-   auto-advance and screen wake lock. */
+   auto-advance and screen wake lock. Steps with `prep: true` are short
+   "get ready" transitions: they show the upcoming exercise, don't count
+   as a step, and skip/back jump over them. */
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, SkipForward, SkipBack, X, Check } from "lucide-react";
 import { beep, vibrate, keepAwake, unlockAudio } from "../lib/device.js";
@@ -44,14 +46,19 @@ export default function StepPlayer({ title, steps, color = "var(--accent)", onDo
     const k = Math.max(0, Math.min(steps.length - 1, n));
     setI(k); setLeft(steps[k].sec);
   };
+  // skip / back move between real exercises, never onto a transition
+  const realIdx = steps.map((s, k) => (s.prep ? -1 : k)).filter((k) => k >= 0);
+  const nextReal = realIdx.find((k) => k > i);
+  const prevReal = [...realIdx].reverse().find((k) => k < i);
   const toggle = () => { unlockAudio(); setRunning((r) => !r); };
 
   const cur = steps[i];
-  const next = steps[i + 1];
   const size = 236, stroke = 12, r = (size - stroke) / 2, c = 2 * Math.PI * r;
   const p = cur?.sec ? left / cur.sec : 0;
-  const ringColor = cur?.effort ? EFFORT_COLOR[cur.effort] : color;
+  const ringColor = cur?.prep ? "var(--muted)" : cur?.effort ? EFFORT_COLOR[cur.effort] : color;
   const totalLeft = left + steps.slice(i + 1).reduce((a, s) => a + s.sec, 0);
+  const stepNo = realIdx.filter((k) => k <= i).length + (cur?.prep ? 1 : 0);
+  const upcoming = steps.slice(i + 1).find((s) => !s.prep);
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "var(--bg)", overflowY: "auto" }}>
@@ -59,7 +66,7 @@ export default function StepPlayer({ title, steps, color = "var(--accent)", onDo
         <div className="between" style={{ marginBottom: 10 }}>
           <div>
             <div className="eyebrow">{title}</div>
-            <div className="small muted">Step {i + 1} of {steps.length} · {clock(totalLeft)} left</div>
+            <div className="small muted">Step {stepNo} of {realIdx.length} · {clock(totalLeft)} left</div>
           </div>
           <button className="iconbtn" aria-label="Close player" onClick={onClose}><X size={20} /></button>
         </div>
@@ -78,6 +85,7 @@ export default function StepPlayer({ title, steps, color = "var(--accent)", onDo
           <div className="stack">
             {cur?.img && <div className="illus" style={{ maxHeight: 230 }}><img src={cur.img} alt={cur.label} style={{ maxHeight: 230, objectFit: "contain", margin: "0 auto" }} /></div>}
             <div className="center">
+              {cur?.prep && <div className="eyebrow" style={{ color: "var(--muted)" }}>Get ready · next up</div>}
               <div className="h2" style={{ fontSize: 22 }}>{cur?.label}</div>
               {cur?.desc && <p className="small muted" style={{ margin: "6px auto 0", maxWidth: 420 }}>{cur.desc}</p>}
             </div>
@@ -95,13 +103,13 @@ export default function StepPlayer({ title, steps, color = "var(--accent)", onDo
               </div>
             </div>
             <div className="hstack" style={{ justifyContent: "center", gap: 16 }}>
-              <button className="iconbtn" aria-label="Previous step" onClick={() => jump(i - 1)}><SkipBack size={20} /></button>
+              <button className="iconbtn" aria-label="Previous step" onClick={() => jump(prevReal ?? 0)}><SkipBack size={20} /></button>
               <button className="btn primary" style={{ width: 120, height: 60, borderRadius: 20, background: color }} onClick={toggle} aria-label={running ? "Pause" : "Start"}>
                 {running ? <Pause size={26} /> : <Play size={26} />}
               </button>
-              <button className="iconbtn" aria-label="Next step" onClick={() => (i + 1 < steps.length ? jump(i + 1) : setFinished(true))}><SkipForward size={20} /></button>
+              <button className="iconbtn" aria-label="Next step" onClick={() => (nextReal != null ? jump(nextReal) : (setRunning(false), setFinished(true)))}><SkipForward size={20} /></button>
             </div>
-            {next && <div className="card tight small"><span className="muted">Next: </span><b>{next.label}</b> <span className="muted">· {clock(next.sec)}</span></div>}
+            {!cur?.prep && upcoming && <div className="card tight small"><span className="muted">Next: </span><b>{upcoming.label}</b> <span className="muted">· {clock(upcoming.sec)}</span></div>}
           </div>
         )}
       </div>

@@ -7,7 +7,8 @@ import { mealById, MEALS } from "../features/nutrition/data/meals.js";
 import { parseLabel, labelWarning, labelMacros } from "../features/nutrition/engine/label.js";
 import { EXERCISES } from "../features/training/data/exercises.js";
 import { FOODS } from "../features/nutrition/data/foods.js";
-import { routineStreak, DEFAULT_SCHEDULE } from "../features/routines/programs.js";
+import { routineStreak, DEFAULT_SCHEDULE, ROUTINES, routineSteps, routineMinutes, assignDay, swapDays } from "../features/routines/programs.js";
+import { PORTIONS } from "../features/today/portions.js";
 import { addDays, dayIdx, weekStart } from "../lib/dates.js";
 import { decideSync } from "../lib/sync.js";
 
@@ -433,5 +434,37 @@ Eiweiss / Protéines 10g 49
 Salz / Sel 0.5g 0.29`);
     expect([r.kcal, r.p, r.c, r.f]).toEqual([370, 10, 50, 12]);
     expect(r.warning).toBeNull();
+  });
+});
+
+describe("routine transitions + week planner", () => {
+  it("adds a 5 s get-ready step between exercises, timings untouched", () => {
+    const rt = ROUTINES.back;
+    const steps = routineSteps(rt);
+    expect(steps.length).toBe(rt.exercises.length * 2 - 1);
+    expect(steps[0].prep).toBeUndefined();
+    expect(steps[1]).toMatchObject({ prep: true, sec: 5, label: rt.exercises[1].name });
+    expect(steps.filter((s) => !s.prep).map((s) => s.sec)).toEqual(rt.exercises.map((e) => e.sec));
+    expect(routineSteps(rt, 0).length).toBe(rt.exercises.length);
+  });
+  it("minutes include the transitions", () => {
+    const rt = ROUTINES.core; // 255 s + 5 × 5 s = 280 s
+    expect(routineMinutes(rt)).toBe(4.7);
+    expect(routineMinutes(rt, 0)).toBe(4.3);
+  });
+  it("assigns and swaps weekdays", () => {
+    const s = ["back", "core", "mobility", null, null, "back", "core"];
+    expect(assignDay(s, 3, "core")[3]).toBe("core");
+    expect(assignDay(s, 0, null)[0]).toBe(null);
+    expect(swapDays(s, 0, 3)).toEqual([null, "core", "mobility", "back", null, "back", "core"]);
+    expect(swapDays(s, 2, 2)).toBe(s);
+    expect(s[0]).toBe("back"); // pure
+  });
+  it("portion cheat sheet matches what was agreed", () => {
+    const row = (n) => PORTIONS.rows.find((r) => r.name.startsWith(n));
+    expect(row("Chicken")).toMatchObject({ bulk: 250, cut: 250 });
+    expect(row("Mince")).toMatchObject({ bulk: 175, cut: 200 });
+    expect(row("Rice")).toMatchObject({ bulk: 125, cut: 75 });
+    expect(row("Pasta")).toMatchObject({ bulk: 125, cut: 75 });
   });
 });

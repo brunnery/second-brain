@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
-import { Target, Scale, Cloud, Download, Upload, CalendarDays, Trash2, ChevronRight, Info, Copy, Clock } from "lucide-react";
+import { Target, Scale, Cloud, Download, Upload, CalendarDays, Trash2, ChevronRight, Info, Copy, Clock, UtensilsCrossed } from "lucide-react";
 import { PageHead, Field, toast } from "../../components/ui.jsx";
 import { go } from "../../app/router.js";
 import { useProfile } from "../profile/store.js";
 import { GOALS, PHASES } from "../profile/goals.js";
 import GoalsSheet from "../profile/GoalsSheet.jsx";
 import BodyView from "../body/BodyView.jsx";
+import Portions from "../today/Portions.jsx";
 import SyncPanel from "./SyncPanel.jsx";
 import { exportBackup, importBackup, downloadFile } from "../../lib/backup.js";
 import { resetAll, getState } from "../../lib/storage.js";
@@ -51,6 +52,7 @@ export default function MorePage({ route }) {
   const sub = route[0];
 
   if (sub === "body") return <><PageHead eyebrow="More" title="Body" /><BodyView /></>;
+  if (sub === "portions") return <><PageHead eyebrow="More" title="Portions per box" /><Portions phase={profile.goal === "cut" ? "cut" : "bulk"} /></>;
   if (sub === "sync") return <><PageHead eyebrow="More" title="Sync" /><SyncPanel /></>;
   if (sub === "calendar") return <><PageHead eyebrow="More" title="Calendar" /><CalendarSection /></>;
 
@@ -59,10 +61,11 @@ export default function MorePage({ route }) {
       <PageHead eyebrow="Settings" title="More" />
       <div className="card flush list">
         <Row icon={Target} title="Goals & setup" sub={`${GOALS[profile.goal].name} · ${PHASES[profile.phase].short} · ${profile.daysPerWeek} days`} onClick={() => setGoals(true)} />
+        <Row icon={UtensilsCrossed} title="Portions" sub="Chicken · mince · rice · pasta per box" onClick={() => go("more/portions")} />
         <Row icon={Scale} title="Body weight" sub="Weigh-ins, 7-day average, trend" onClick={() => go("more/body")} />
         <Row icon={Cloud} title="Cloud sync" sub="iPhone · iPad · laptop" onClick={() => go("more/sync")} />
         <Row icon={CalendarDays} title="Calendar" sub="Export or subscribe" onClick={() => go("more/calendar")} />
-        <Row icon={Clock} title="Evening routines" sub="Schedule & programs" onClick={() => go("train/mobility")} />
+        <Row icon={Clock} title="Evening routines" sub="Schedule & programs" onClick={() => go("routines")} />
       </div>
 
       <div className="card flush list">
