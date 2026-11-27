@@ -5,7 +5,10 @@ import { Play, Check, Moon, Pill, Scale, Plus, Dumbbell, Flame, ChevronRight, Tr
 import { useTraining } from "../training/store.js";
 import { useNutrition } from "../nutrition/store.js";
 import { useCardio } from "../cardio/store.js";
-import { useBody } from "../body/store.js";
+import { useBody, latestWeight } from "../body/store.js";
+import { TRAINING_KINDS, CARDIO_PRESETS, kindOfDay, kindForDate } from "../training/engine/kinds.js";
+import { estimateKcal } from "../cardio/engine/cardio.js";
+import { uid } from "../../lib/uid.js";
 import { useProfile } from "../profile/store.js";
 import { dayForDate } from "../training/engine/plan.js";
 import { movingAverage } from "../nutrition/engine/nutrition.js";
@@ -15,7 +18,7 @@ import { useRoutineToday, routineSteps } from "../routines/RoutinesView.jsx";
 import { routineMinutes } from "../routines/programs.js";
 import { WeightSheet } from "../body/BodyView.jsx";
 import StepPlayer from "../../components/StepPlayer.jsx";
-import { Check as CheckBox } from "../../components/ui.jsx";
+import { Check as CheckBox, Chips } from "../../components/ui.jsx";
 import { Sparkline } from "../../components/charts.jsx";
 import { SyncBadge } from "../settings/SyncPanel.jsx";
 import { go } from "../../app/router.js";
@@ -58,8 +61,19 @@ export default function TodayPage() {
   const planned = training.plan?.days.length || 0;
   const doneWeek = [0, 1, 2, 3, 4, 5, 6].filter((k) => trainedOn(addDays(ws, k))).length;
 
+  const planKind = kindOfDay(day);
+  const kind = kindForDate(training.kinds, d, day);
+  const kindInfo = TRAINING_KINDS[kind];
+  const pickKind = (k) => setTraining((t) => ({ ...t, kinds: { ...(t.kinds || {}), [d]: k } }));
+
   const creatine = !!nutrition.creatine[d];
   const cardioToday = cardio.logs.filter((l) => l.date === d);
+  const quickCardio = (p) => {
+    const kg = latestWeight(body, profile.weightKg);
+    const entry = { id: uid(), date: d, type: "other", intent: p.intent, minutes: p.minutes, note: p.name };
+    entry.kcal = estimateKcal({ ...entry, intensity: p.intensity }, kg);
+    setCardio((c) => ({ ...c, logs: [...c.logs, entry] }));
+  };
 
   const weights = [...body.weights].sort((a, b) => (a.date < b.date ? -1 : 1));
   const avg = movingAverage(weights);
@@ -75,18 +89,44 @@ export default function TodayPage() {
         <SyncBadge />
       </div>
 
-      {/* lifting: just the day + one check */}
-      <button className="card hero area-train hstack press" style={{ width: "100%", textAlign: "left" }} onClick={toggleTrained} aria-pressed={trained}>
-        <span className="icon-tile"><Dumbbell size={18} /></span>
-        <div className="grow">
-          <div className="eyebrow">Today · {doneWeek}/{planned} this week</div>
-          <div className="h2">{day ? `${day.name} day` : "Rest day"}</div>
-          <div className="small muted">{day ? day.focus : "Recover — walk, stretch, eat well."}</div>
+      {/* box 1 — training: pick what you did + one check */}
+      <div className="card hero area-train stack" style={{ gap: 10 }}>
+        <div className="hstack">
+          <span className="icon-tile"><Dumbbell size={18} /></span>
+          <div className="grow">
+            <div className="eyebrow">Training · {doneWeek}/{planned} this week</div>
+            <div className="h2">{kindInfo ? kindInfo.name : day ? `${day.name} day` : "Rest day"}</div>
+            <div className="small muted">{kindInfo ? (kind === planKind ? day.focus : kindInfo.focus) : day ? day.focus : "Recover — or pick what you did."}</div>
+          </div>
+          <button className="todo-check" onClick={toggleTrained} data-on={trained ? "1" : undefined} aria-pressed={trained} aria-label={trained ? "Training done" : "Mark training done"}>
+            <Check size={22} strokeWidth={3} />
+          </button>
         </div>
-        <span className="todo-check" data-on={trained ? "1" : undefined} aria-label={trained ? "Training done" : "Mark training done"}>
-          <Check size={22} strokeWidth={3} />
-        </span>
-      </button>
+        <Chips value={kind} onChange={pickKind} options={Object.entries(TRAINING_KINDS).map(([k, t]) => [k, t.name])} />
+      </div>
+
+      {/* box 2 — separate extra cardio session */}
+      <div className="card tight stack area-cardio" style={{ gap: 10 }}>
+        <div className="hstack">
+          <span className="icon-tile"><Flame size={18} /></span>
+          <div className="grow">
+            <div className="eyebrow">Extra cardio</div>
+            <div className="h3">{cardioToday.length ? `${cardioToday.length} session${cardioToday.length > 1 ? "s" : ""} today` : "Add a separate session"}</div>
+          </div>
+        </div>
+        {cardioToday.map((l) => (
+          <div key={l.id} className="between small">
+            <span><b>{l.note || CARDIO_TYPES[l.type]?.name}</b> <span className="xs muted">· {logSummary(l)}</span></span>
+            <button className="iconbtn sm bare" aria-label="Delete cardio" onClick={() => setCardio((c) => ({ ...c, logs: c.logs.filter((x) => x.id !== l.id) }))}><Trash2 size={15} className="faint" /></button>
+          </div>
+        ))}
+        <div className="chips">
+          {Object.entries(CARDIO_PRESETS).map(([k, p]) => (
+            <button key={k} type="button" className="chip" onClick={() => quickCardio(p)}><Plus size={12} /> {p.name}</button>
+          ))}
+          <button type="button" className="chip" onClick={() => setSheet("cardio")}>Other… <ChevronRight size={12} /></button>
+        </div>
+      </div>
 
       {/* evening routine */}
       <div className="card tight hstack area-mobility">
@@ -103,7 +143,10 @@ export default function TodayPage() {
       {/* creatine */}
       <div className="card tight between">
         <span className="hstack small" style={{ gap: 8 }}><Pill size={16} color="var(--mobility)" /> Creatine 5 g <span className="xs muted">· {streakOf(nutrition.creatine)} day streak</span></span>
-        <CheckBox on={creatine} label="Creatine taken" onClick={() => setNutrition((x) => ({ ...x, creatine: { ...x.creatine, [d]: !creatine } }))} />
+        {/* centred under the big training tick: (16 + 48/2) − (12 + 26/2) = 15 px */}
+        <span style={{ display: "inline-flex", marginRight: 15 }}>
+          <CheckBox on={creatine} label="Creatine taken" onClick={() => setNutrition((x) => ({ ...x, creatine: { ...x.creatine, [d]: !creatine } }))} />
+        </span>
       </div>
 
       {/* weight */}
@@ -117,20 +160,6 @@ export default function TodayPage() {
         {avg.length > 1 && <Sparkline values={avg.slice(-21).map((w) => w.avg)} color="var(--food)" />}
         <button className="btn sm" onClick={() => setSheet("weight")}><Plus size={14} /> Log</button>
       </div>
-
-      {/* cardio — only what you add yourself */}
-      {cardioToday.map((l) => (
-        <div key={l.id} className="card tight hstack area-cardio">
-          <span className="icon-tile" style={{ "--tile": CARDIO_TYPES[l.type]?.color }}><Flame size={18} /></span>
-          <div className="grow">
-            <div className="eyebrow">Cardio</div>
-            <div className="h3">{CARDIO_TYPES[l.type]?.name}{l.note ? ` · ${l.note}` : ""}</div>
-            <div className="xs muted">{logSummary(l)}</div>
-          </div>
-          <button className="iconbtn sm bare" aria-label="Delete cardio" onClick={() => setCardio((c) => ({ ...c, logs: c.logs.filter((x) => x.id !== l.id) }))}><Trash2 size={15} className="faint" /></button>
-        </div>
-      ))}
-      <button className="btn" onClick={() => setSheet("cardio")}><Plus size={16} /> Cardio <ChevronRight size={14} className="faint" /></button>
 
 
       {playing && rt.routine && (

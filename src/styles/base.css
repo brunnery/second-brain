@@ -286,6 +286,6 @@ textarea.input { min-height: 80px; resize: vertical; }
 /* ---------- big done-check on the training card ---------- */
 .todo-check {
   width: 48px; height: 48px; flex-shrink: 0; border-radius: 16px; display: grid; place-items: center;
-  border: 2px solid var(--line-strong); color: transparent; transition: background .15s, border-color .15s, color .15s;
+  border: 2px solid var(--line-strong); color: transparent; background: none; cursor: pointer; transition: background .15s, border-color .15s, color .15s;
 }
 .todo-check[data-on] { background: var(--train); border-color: var(--train); color: var(--on-accent); }

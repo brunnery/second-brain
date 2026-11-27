@@ -9,6 +9,7 @@ registerStore(TRAINING_KEY, () => ({
   activeId: null,        // in-progress session id
   customExercises: [],
   checks: {},            // { "YYYY-MM-DD": dayId | true } — simple "trained today" ticks
+  kinds: {},             // { "YYYY-MM-DD": "push" | "pull" | "legs" | "base" } — what you actually trained
 }));
 export const useTraining = () => useStore(TRAINING_KEY);
 export const getTraining = () => getState(TRAINING_KEY);

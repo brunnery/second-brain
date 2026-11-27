@@ -468,3 +468,22 @@ describe("routine transitions + week planner", () => {
     expect(row("Pasta")).toMatchObject({ bulk: 125, cut: 75 });
   });
 });
+
+import { kindOfDay, kindForDate, TRAINING_KINDS, CARDIO_PRESETS } from "../features/training/engine/kinds.js";
+describe("training kinds", () => {
+  it("maps plan days to push / pull / legs", () => {
+    expect(kindOfDay({ name: "Push A" })).toBe("push");
+    expect(kindOfDay({ name: "Pull B" })).toBe("pull");
+    expect(kindOfDay({ name: "Legs A" })).toBe("legs");
+    expect(kindOfDay({ name: "Upper A" })).toBe(null);
+    expect(kindOfDay(null)).toBe(null);
+  });
+  it("own pick overrides the plan", () => {
+    expect(kindForDate({ "2026-11-27": "base" }, "2026-11-27", { name: "Push A" })).toBe("base");
+    expect(kindForDate({}, "2026-11-27", { name: "Legs B" })).toBe("legs");
+  });
+  it("has four kinds and three presets", () => {
+    expect(Object.keys(TRAINING_KINDS)).toEqual(["push", "pull", "legs", "base"]);
+    expect(Object.keys(CARDIO_PRESETS)).toHaveLength(3);
+  });
+});
