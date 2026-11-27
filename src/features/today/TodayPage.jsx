@@ -68,11 +68,27 @@ export default function TodayPage() {
 
   const creatine = !!nutrition.creatine[d];
   const cardioToday = cardio.logs.filter((l) => l.date === d);
-  const quickCardio = (p) => {
-    const kg = latestWeight(body, profile.weightKg);
-    const entry = { id: uid(), date: d, type: "other", intent: p.intent, minutes: p.minutes, note: p.name };
-    entry.kcal = estimateKcal({ ...entry, intensity: p.intensity }, kg);
-    setCardio((c) => ({ ...c, logs: [...c.logs, entry] }));
+  const pick = (cardio.picks || {})[d] || null;
+  const quickLog = cardioToday.find((l) => l.quick);
+  const otherLogs = cardioToday.filter((l) => !l.quick);
+  const cardioDone = cardioToday.length > 0;
+  const presetLog = (key) => {
+    const p = CARDIO_PRESETS[key];
+    const entry = { id: uid(), date: d, type: "other", intent: p.intent, minutes: p.minutes, note: p.name, quick: true };
+    entry.kcal = estimateKcal({ ...entry, intensity: p.intensity }, latestWeight(body, profile.weightKg));
+    return entry;
+  };
+  const withoutQuick = (logs) => logs.filter((l) => !(l.quick && l.date === d));
+  // choosing a chip only picks it; if it was already ticked, the logged session follows the new pick
+  const pickCardio = (key) => setCardio((c) => ({
+    ...c,
+    picks: { ...(c.picks || {}), [d]: key },
+    logs: quickLog ? [...withoutQuick(c.logs), presetLog(key)] : c.logs,
+  }));
+  const toggleCardio = () => {
+    if (quickLog) return setCardio((c) => ({ ...c, logs: withoutQuick(c.logs) }));
+    if (!pick) return setSheet("cardio");
+    setCardio((c) => ({ ...c, logs: [...c.logs, presetLog(pick)] }));
   };
 
   const weights = [...body.weights].sort((a, b) => (a.date < b.date ? -1 : 1));
@@ -105,24 +121,28 @@ export default function TodayPage() {
         <Chips value={kind} onChange={pickKind} options={Object.entries(TRAINING_KINDS).map(([k, t]) => [k, t.name])} />
       </div>
 
-      {/* box 2 — separate extra cardio session */}
-      <div className="card tight stack area-cardio" style={{ gap: 10 }}>
+      {/* box 2 — separate extra cardio session: pick + one check */}
+      <div className="card hero area-cardio stack" style={{ gap: 10 }}>
         <div className="hstack">
           <span className="icon-tile"><Flame size={18} /></span>
           <div className="grow">
             <div className="eyebrow">Extra cardio</div>
-            <div className="h3">{cardioToday.length ? `${cardioToday.length} session${cardioToday.length > 1 ? "s" : ""} today` : "Add a separate session"}</div>
+            <div className="h2">{pick ? CARDIO_PRESETS[pick].name : cardioDone ? "Cardio done" : "Separate session"}</div>
+            <div className="small muted">{quickLog ? logSummary(quickLog) : pick ? `${CARDIO_PRESETS[pick].minutes} min` : "Pick one, then tick it off"}</div>
           </div>
+          <button className="todo-check" onClick={toggleCardio} data-on={cardioDone ? "1" : undefined} aria-pressed={cardioDone} aria-label={cardioDone ? "Cardio done" : "Mark cardio done"}>
+            <Check size={22} strokeWidth={3} />
+          </button>
         </div>
-        {cardioToday.map((l) => (
+        {otherLogs.map((l) => (
           <div key={l.id} className="between small">
-            <span><b>{l.note || CARDIO_TYPES[l.type]?.name}</b> <span className="xs muted">· {logSummary(l)}</span></span>
+            <span><b>{CARDIO_TYPES[l.type]?.name}{l.note ? ` · ${l.note}` : ""}</b> <span className="xs muted">· {logSummary(l)}</span></span>
             <button className="iconbtn sm bare" aria-label="Delete cardio" onClick={() => setCardio((c) => ({ ...c, logs: c.logs.filter((x) => x.id !== l.id) }))}><Trash2 size={15} className="faint" /></button>
           </div>
         ))}
         <div className="chips">
           {Object.entries(CARDIO_PRESETS).map(([k, p]) => (
-            <button key={k} type="button" className="chip" onClick={() => quickCardio(p)}><Plus size={12} /> {p.name}</button>
+            <button key={k} type="button" className={`chip ${pick === k ? "on" : ""}`} aria-pressed={pick === k} onClick={() => pickCardio(k)}>{p.name}</button>
           ))}
           <button type="button" className="chip" onClick={() => setSheet("cardio")}>Other… <ChevronRight size={12} /></button>
         </div>
@@ -141,12 +161,9 @@ export default function TodayPage() {
       </div>
 
       {/* creatine */}
-      <div className="card tight between">
+      <div className="card tight between area-mobility">
         <span className="hstack small" style={{ gap: 8 }}><Pill size={16} color="var(--mobility)" /> Creatine 5 g <span className="xs muted">· {streakOf(nutrition.creatine)} day streak</span></span>
-        {/* centred under the big training tick: (16 + 48/2) − (12 + 26/2) = 15 px */}
-        <span style={{ display: "inline-flex", marginRight: 15 }}>
-          <CheckBox on={creatine} label="Creatine taken" onClick={() => setNutrition((x) => ({ ...x, creatine: { ...x.creatine, [d]: !creatine } }))} />
-        </span>
+        <CheckBox on={creatine} label="Creatine taken" onClick={() => setNutrition((x) => ({ ...x, creatine: { ...x.creatine, [d]: !creatine } }))} />
       </div>
 
       {/* weight */}

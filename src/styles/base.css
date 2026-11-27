@@ -170,7 +170,7 @@ button.row:active { background: var(--raised); }
 textarea.input { min-height: 80px; resize: vertical; }
 .check {
   width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--line-strong);
-  display: grid; place-items: center; flex-shrink: 0; background: transparent; color: var(--on-accent);
+  display: grid; place-items: center; flex-shrink: 0; padding: 0; background: transparent; color: var(--on-accent);
 }
 .check.on { background: var(--accent); border-color: var(--accent); }
 .toggle { position: relative; width: 46px; height: 28px; border-radius: 999px; border: 0; background: var(--line-strong); flex-shrink: 0; }
@@ -286,6 +286,6 @@ textarea.input { min-height: 80px; resize: vertical; }
 /* ---------- big done-check on the training card ---------- */
 .todo-check {
   width: 48px; height: 48px; flex-shrink: 0; border-radius: 16px; display: grid; place-items: center;
-  border: 2px solid var(--line-strong); color: transparent; background: none; cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+  border: 2px solid var(--line-strong); color: transparent; background: none; cursor: pointer; padding: 0; transition: background .15s, border-color .15s, color .15s;
 }
-.todo-check[data-on] { background: var(--train); border-color: var(--train); color: var(--on-accent); }
+.todo-check[data-on] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }

@@ -6,5 +6,6 @@ registerStore(CARDIO_KEY, () => ({
   logs: [],          // { id, date, type, intent, workoutId?, minutes, distance?, watts?, speed?, incline?, level?, floors?, calories?, avgHr?, rpe?, kcal, note }
   overrides: {},     // { "YYYY-MM-DD#slot": workoutId } — shuffled suggestions
   skipped: {},       // { "YYYY-MM-DD#slot": true }
+  picks: {},         // { "YYYY-MM-DD": presetKey } — Today's extra-cardio choice (logs from it carry quick: true)
 }));
 export const useCardio = () => useStore(CARDIO_KEY);
